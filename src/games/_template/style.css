@@ -1,0 +1,2 @@
+/* Styles for __TITLE__. Use the shared tokens (var(--accent), var(--panel), var(--display)…) so every world looks right. */
+.__SLUG__-out { margin: 0; font-family: var(--label); letter-spacing: .08em; }
