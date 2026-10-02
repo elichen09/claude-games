@@ -48,7 +48,6 @@
 .dc .verdict { display:grid; gap:4px; }
 .dc .verdict .tier { font-family: var(--display); font-weight: 700; font-size: calc(clamp(24px, 5.6vw, 40px) * var(--dsize)); line-height: 1.05; text-transform: uppercase; }
 .dc .verdict .pts { font-family: var(--display); font-variant-numeric: tabular-nums; font-size: calc(20px * var(--dsize)); }
-.dc .quip { color: var(--muted); border-left: 4px solid var(--accent2); padding-left: 10px; }
 .dc .board { display:grid; gap:3px; }
 .dc .board h3 { margin: 0 0 4px; font-family: var(--label); font-weight: 400; font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); }
 .dc .bar { position:relative; display:grid; grid-template-columns: 2.6em 1fr auto; gap:8px; align-items:center; padding: 3px 10px; overflow:hidden; background: var(--panel2); }
@@ -61,7 +60,7 @@
 .dc .big { font-family: var(--display); font-size: calc(clamp(40px, 11vw, 80px) * var(--dsize)); line-height: 1; color: var(--accent); font-variant-numeric: tabular-nums; }
 .dc .recap { display:grid; gap:4px; }
 .dc .recap .r, .dc .pa { display:grid; grid-template-columns: 1fr auto; gap: 2px 12px; padding: 8px 12px; background: var(--panel); }
-.dc .recap .r .p, .dc .pa .q { color: var(--muted); font-size: .85em; grid-column: 1 / -1; }
+.dc .recap .r .p { color: var(--muted); font-size: .85em; grid-column: 1 / -1; }
 .dc .recap .r .a { min-width:0; overflow-wrap:anywhere; }
 .dc .recap .r .s { font-variant-numeric: tabular-nums; }
 .dc .pa { background: var(--panel2); }

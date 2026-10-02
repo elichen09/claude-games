@@ -1,11 +1,10 @@
 /* Deep Cut — the in-browser game. Renders into the root element the arcade hands it. */
-import { ApiError, type GameContext } from "@/lib/games/types";
+import type { GameContext } from "@/lib/games/types";
 import type { WorldId } from "@/lib/worlds/meta";
 import {
   CATEGORIES, MODES, PROMPTS, catName, comboMult, dailySet, key, match, pct, pointsFor, pool, shuffle, tierFor, today,
   type Prompt,
 } from "./logic";
-import type { JudgeResult } from "./server";
 
 /** How each world flavors the game: score units, verbs, tier names. */
 const FLAVOR: Record<WorldId, { mul: number; go: string; tiers: string[]; lost: string; depthWord: string; hint: string }> = {
@@ -16,7 +15,7 @@ const FLAVOR: Record<WorldId, { mul: number; go: string; tiers: string[]; lost: 
 };
 const TIER_EMOJI = ["⬜", "🟦", "🟩", "🟪", "🟨"];
 
-interface Resolved { valid: boolean; name: string; share: number; rank?: number | null; judged?: boolean; quip?: string; reason?: string }
+interface Resolved { valid: boolean; name: string; share: number; rank?: number | null }
 
 const esc = (s: unknown) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 const tierColor = (t: number) => `var(--t${t})`;
@@ -24,40 +23,22 @@ const modeName = (id: string) => MODES.find((m) => m.id === id)!.name;
 
 export function mountDeepCut(root: HTMLElement, ctx: GameContext) {
   const ls = ctx.storage;
-  const S = Object.assign({ judge: true, cat: "sports", mode: "daily" }, ls.get("settings", {} as Partial<{ judge: boolean; cat: string; mode: string }>));
+  const S = Object.assign({ cat: "sports", mode: "daily" }, ls.get("settings", {} as Partial<{ cat: string; mode: string }>));
   const saveSettings = () => ls.set("settings", S);
   const fl = () => FLAVOR[ctx.world.current()];
   const fmt = (pts: number) => ctx.world.format(pts * fl().mul);
   const setDepth = (score: number) => ctx.world.setValue(score * fl().mul);
   const $ = <T extends HTMLElement = HTMLElement>(id: string) => root.querySelector<T>("#" + id)!;
 
-  let judgeAvailable = false;
-  const judgeOn = () => judgeAvailable && S.judge;
-  const judgeCache = ls.get<Record<string, JudgeResult>>("judged", {});
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let G: any = null;
   let view = "home";
   let timerId: ReturnType<typeof setInterval> | null = null;
   let alive = true;
 
-  ctx.api<{ judge: boolean }>("status").then((r) => { judgeAvailable = !!r.judge; if (alive && view === "home") render(); }).catch(() => {});
-
-  async function judge(p: Prompt, input: string): Promise<JudgeResult> {
-    const ck = p.id + "|" + key(input);
-    if (judgeCache[ck]) return judgeCache[ck];
-    const out = await ctx.api<JudgeResult>("judge", { promptId: p.id, answer: input.slice(0, 80) });
-    judgeCache[ck] = out;
-    const keys = Object.keys(judgeCache); if (keys.length > 400) delete judgeCache[keys[0]];
-    ls.set("judged", judgeCache);
-    return out;
-  }
-  async function resolve(p: Prompt, input: string): Promise<Resolved> {
+  function resolve(p: Prompt, input: string): Resolved {
     const m = match(p, input);
-    if (m) return { valid: true, name: m.name, share: m.share, rank: m.rank, judged: false };
-    if (!judgeOn()) return { valid: false, name: input, share: 0, reason: judgeAvailable ? "Not on the board, and the judge is off." : "Not on the board." };
-    const j = await judge(p, input);
-    if (!j.valid) return { valid: false, name: input, share: 0, quip: j.quip, judged: true, reason: "The judge ruled it out." };
-    return { valid: true, name: j.name, share: j.share, rank: null, judged: true, quip: j.quip };
+    return m ? { valid: true, name: m.name, share: m.share, rank: m.rank } : { valid: false, name: input, share: 0 };
   }
 
   /* ── ui helpers ── */
@@ -67,7 +48,6 @@ export function mountDeepCut(root: HTMLElement, ctx: GameContext) {
     return `<div class="toolbar">
       <button class="title-btn" id="dcHome" aria-label="Deep Cut menu">Deep Cut</button>
       <span class="sp"></span>
-      ${judgeAvailable ? `<button class="iconbtn" id="judgeBtn" aria-pressed="${S.judge}" title="Claude rules on answers that aren't on the board">Judge ${S.judge ? "on" : "off"}</button>` : ""}
     </div>`;
   }
   function wireHeader() {
@@ -79,8 +59,6 @@ export function mountDeepCut(root: HTMLElement, ctx: GameContext) {
       }
       stopTimer(); G = null; go("home");
     };
-    const jb = root.querySelector<HTMLElement>("#judgeBtn");
-    if (jb) jb.onclick = () => { S.judge = !S.judge; saveSettings(); jb.setAttribute("aria-pressed", String(S.judge)); jb.textContent = "Judge " + (S.judge ? "on" : "off"); };
   }
   function go(v: string) { view = v; render(); window.scrollTo({ top: 0 }); }
   function render() {
@@ -117,7 +95,7 @@ export function mountDeepCut(root: HTMLElement, ctx: GameContext) {
       <div class="skins">${ctx.world.list().map((w) => `<button class="skin" data-world-id="${w.id}" aria-pressed="${ctx.world.current() === w.id}"><span class="sw" style="background:${w.swatch}"></span><span class="lbl"><b>${w.name}</b><small>${w.sub}</small></span></button>`).join("")}</div>
     </section>
     <section class="panel"><div class="row"><button class="go" id="start">${S.mode === "daily" && done ? "See today's dive" : "Start " + modeName(S.mode)}</button>
-      <span class="note">${catName(S.cat)} · ${pool(S.cat).length} prompts${judgeOn() ? " · Claude judges off-board answers" : ""}</span></div></section>
+      <span class="note">${catName(S.cat)} · ${pool(S.cat).length} prompts</span></div></section>
     <footer class="footer"><span>Rarity figures are estimates.</span><span>${PROMPTS.length} prompts · ${total.toLocaleString("en-US")} answers</span></footer>`;
     root.querySelectorAll<HTMLElement>(".cat").forEach((b) => (b.onclick = () => keepScroll(() => { S.cat = b.dataset.cat!; saveSettings(); ctx.sound.click(); render(); })));
     root.querySelectorAll<HTMLElement>(".mode").forEach((b) => (b.onclick = () => keepScroll(() => { S.mode = b.dataset.mode!; saveSettings(); ctx.sound.click(); render(); })));
@@ -186,8 +164,8 @@ export function mountDeepCut(root: HTMLElement, ctx: GameContext) {
       if (sk2) sk2.onclick = () => { G.combo = 0; G.i++; ctx.sound.click(); blitzNext("Skipped."); };
     } else showReveal();
   }
-  async function submit(raw: string) {
-    const input = raw.trim(); if (!input || G.busy) return;
+  function submit(raw: string) {
+    const input = raw.trim(); if (!input) return;
     const p = cur(), msg = $("msg"), card = $("qcard");
     const shakeCard = () => { card.classList.remove("shake"); void card.offsetWidth; card.classList.add("shake"); };
     if (G.mode === "blitz") {
@@ -200,26 +178,11 @@ export function mountDeepCut(root: HTMLElement, ctx: GameContext) {
       flash(`+${fmt(pts)} · ${m.name} ${pct(m.share)}`, tierColor(t));
       G.i++; blitzNext(""); return;
     }
-    G.busy = true;
-    const btn = $<HTMLButtonElement>("goBtn"), inp = $<HTMLInputElement>("ans");
-    btn.disabled = inp.disabled = true;
-    if (!match(p, input) && judgeOn()) msg.innerHTML = `<span class="spinner"></span> Claude is ruling on “${esc(input)}”…`;
-    let r: Resolved;
-    try { r = await resolve(p, input); }
-    catch (e) {
-      if (!alive) return;
-      G.busy = false; btn.disabled = inp.disabled = false; inp.focus();
-      const code = e instanceof ApiError ? e.code : "";
-      if (code === "judge_unavailable") { judgeAvailable = false; msg.innerHTML = `<span class="err">The judge isn't available, so only board answers count. Try another.</span>`; }
-      else msg.innerHTML = `<span class="err">${code === "rate_limited" ? "The judge needs a breather." : "The judge couldn't rule on that."} Try another answer.</span>`;
-      return;
-    }
-    if (!alive) return;
-    G.busy = false;
+    const r = resolve(p, input);
     if (!r.valid && G.mode === "daily" && G.tries === 0) {
       G.tries = 1; ctx.sound.miss(); shakeCard();
-      btn.disabled = inp.disabled = false; inp.select(); inp.focus();
-      msg.innerHTML = `<span class="err">${r.quip ? esc(r.quip) : "Not on the board."} One try left.</span>`; return;
+      const inp = $<HTMLInputElement>("ans"); inp.select(); inp.focus();
+      msg.innerHTML = `<span class="err">Not on the board. One try left.</span>`; return;
     }
     const t = r.valid ? tierFor(r.share) : -1;
     let pts = 0;
@@ -228,7 +191,7 @@ export function mountDeepCut(root: HTMLElement, ctx: GameContext) {
     let lifeLost = false;
     if (G.mode === "survival" && (!r.valid || t === 0)) { G.lives--; lifeLost = true; }
     G.score += pts;
-    G.results.push({ q: p.q, pid: p.id, input, valid: r.valid, name: r.name, share: r.share, rank: r.rank, judged: r.judged, quip: r.quip, reason: r.reason, tier: t, pts, mult: comboMult(G.combo), lifeLost });
+    G.results.push({ q: p.q, pid: p.id, input, valid: r.valid, name: r.name, share: r.share, rank: r.rank, tier: t, pts, mult: comboMult(G.combo), lifeLost });
     G.phase = "reveal";
     setDepth(G.score);
     if (r.valid) { ctx.sound.reward(t); if (t >= 3) ctx.world.burst(t); if (t === 4) { document.body.classList.remove("shakescreen"); void document.body.offsetWidth; document.body.classList.add("shakescreen"); } }
@@ -248,10 +211,9 @@ export function mountDeepCut(root: HTMLElement, ctx: GameContext) {
   }
   function boardHTML(p: Prompt, res: Resolved | null, n = 8) {
     const max = p.answers[0].share;
-    let html = p.answers.slice(0, n).map((a) => barHTML(a.rank, a.name, a.share, max, !!(res && res.valid && !res.judged && a.name === res.name))).join("");
+    let html = p.answers.slice(0, n).map((a) => barHTML(a.rank, a.name, a.share, max, !!(res && res.valid && a.name === res.name))).join("");
     if (res && res.valid) {
-      if (res.judged) html += `<div class="bar gap">· · ·</div>` + barHTML("new", res.name + " (judged)", res.share, max, true);
-      else if (res.rank && res.rank > n) html += `<div class="bar gap">· · · ${res.rank - n - 1 > 0 ? res.rank - n - 1 + " more" : ""}</div>` + barHTML(res.rank, res.name, res.share, max, true);
+      if (res.rank && res.rank > n) html += `<div class="bar gap">· · · ${res.rank - n - 1 > 0 ? res.rank - n - 1 + " more" : ""}</div>` + barHTML(res.rank, res.name, res.share, max, true);
     }
     return `<div class="board"><h3>What the crowd said · ${p.answers.length} answers on the board</h3>${html}</div>`;
   }
@@ -264,10 +226,8 @@ export function mountDeepCut(root: HTMLElement, ctx: GameContext) {
     el.innerHTML = `
       <div class="verdict pop">
         <span class="tier" style="color:${r.valid ? tierColor(r.tier) : "var(--bad)"}">${tierName}</span>
-        <span class="what">${r.valid ? `<b>${esc(r.name)}</b>: ${r.share >= 0.1 ? "about " : ""}${pct(r.share)} of players say this${r.rank ? ` (#${r.rank})` : ""}.` : `“${esc(r.input)}” ${r.judged ? "was ruled out." : "isn't on the board."}`}</span>
+        <span class="what">${r.valid ? `<b>${esc(r.name)}</b>: ${r.share >= 0.1 ? "about " : ""}${pct(r.share)} of players say this${r.rank ? ` (#${r.rank})` : ""}.` : `“${esc(r.input)}” isn't on the board.`}</span>
         <span class="pts" style="color:${r.valid ? tierColor(r.tier) : "var(--muted)"}">+${fmt(r.pts)}${r.mult > 1 && r.valid ? ` <small class="note">combo ×${r.mult}</small>` : ""}</span>
-        ${r.quip ? `<span class="quip">Judge: ${esc(r.quip)}</span>` : ""}
-        ${!r.valid && !r.judged && judgeAvailable && !S.judge ? `<span class="note">Turn the judge on to have Claude rule on off-board answers.</span>` : ""}
         ${r.lifeLost ? `<span class="note" style="color:var(--bad)">${r.valid ? "Too obvious. " : ""}You lost a life.</span>` : ""}
       </div>
       ${boardHTML(p, r)}
@@ -358,20 +318,16 @@ export function mountDeepCut(root: HTMLElement, ctx: GameContext) {
         e.preventDefault(); const v = inp.value.trim(); if (!v) return;
         G.answers.push({ player: G.turn, input: v }); ctx.sound.click();
         G.turnCount++; // seats rotate each round so nobody always goes first
-        if (G.turnCount < G.players.length) { G.turn = (G.round + G.turnCount) % G.players.length; G.step = "handoff"; } else G.step = "judging";
+        if (G.turnCount < G.players.length) { G.turn = (G.round + G.turnCount) % G.players.length; G.step = "handoff"; } else resolveRound();
         again();
       };
-    } else if (G.step === "judging") {
-      root.innerHTML = header() + tag + `<section class="card"><div class="eyebrow">Everyone's in</div><h1 class="prompt">${esc(p.q)}</h1><p><span class="spinner"></span> Checking answers against the board…</p></section>`;
-      void resolveRound();
     } else if (G.step === "reveal") {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const rows = G.answers.slice().sort((a: any, b: any) => b.pts - a.pts);
       const lastRound = G.round >= G.prompts.length - 1;
       root.innerHTML = header() + tag + `<section class="card reveal"><div class="eyebrow">Round ${G.round + 1} reveal</div><h1 class="prompt">${esc(p.q)}</h1>
         <div class="recap">${rows.map((a: Record<string, never>) => `<div class="pa pop"><span class="who">${esc(G.players[a.player].name)}</span><span class="s" style="text-align:right">+${fmt(a.pts)}</span>
-          <span><b>${esc(a.valid ? a.name : a.input)}</b> ${a.jinx ? `<span class="pill" style="background:var(--bad)">Jinx</span>` : a.valid ? `<span class="pill" style="background:${tierColor(a.tier)}">${fl().tiers[a.tier]}</span> <span class="note">${pct(a.share)}</span>` : `<span class="pill" style="background:var(--bad)">miss</span>`}</span>
-          ${a.quip ? `<span class="q">Judge: ${esc(a.quip)}</span>` : ""}</div>`).join("")}</div>
+          <span><b>${esc(a.valid ? a.name : a.input)}</b> ${a.jinx ? `<span class="pill" style="background:var(--bad)">Jinx</span>` : a.valid ? `<span class="pill" style="background:${tierColor(a.tier)}">${fl().tiers[a.tier]}</span> <span class="note">${pct(a.share)}</span>` : `<span class="pill" style="background:var(--bad)">miss</span>`}</span></div>`).join("")}</div>
         ${boardHTML(p, null, 6)}
         <div class="row"><button class="go" id="pnext">${lastRound ? "Final scores" : "Next round"}</button></div></section>`;
       animateBars(root);
@@ -389,13 +345,13 @@ export function mountDeepCut(root: HTMLElement, ctx: GameContext) {
       $("pmenu").onclick = () => { G = null; go("home"); };
     }
   }
-  async function resolveRound() {
+  /** Scores the round's answers, applies jinxes and moves the party to the reveal. */
+  function resolveRound() {
     const p: Prompt = G.prompts[G.round];
     for (const a of G.answers) {
-      try { Object.assign(a, await resolve(p, a.input)); } catch { Object.assign(a, { valid: false }); }
+      Object.assign(a, resolve(p, a.input));
       a.tier = a.valid ? tierFor(a.share) : -1; a.pts = a.valid ? pointsFor(a.share) : 0;
     }
-    if (!alive) return;
     const seen = new Map<string, number>();
     for (const a of G.answers) if (a.valid) { const k = key(a.name); seen.set(k, (seen.get(k) || 0) + 1); }
     for (const a of G.answers) if (a.valid && (seen.get(key(a.name)) || 0) > 1) { a.jinx = true; a.pts = 0; }
@@ -404,7 +360,7 @@ export function mountDeepCut(root: HTMLElement, ctx: GameContext) {
     if (bestT >= 0) ctx.sound.reward(bestT); else ctx.sound.miss();
     if (bestT >= 3) ctx.world.burst(bestT);
     setDepth(Math.max(...G.players.map((x: { score: number }) => x.score)));
-    G.step = "reveal"; renderParty(); wireHeader();
+    G.step = "reveal";
   }
 
   /* keyboard: Enter advances reveal screens */

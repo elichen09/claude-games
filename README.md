@@ -18,8 +18,7 @@ npm run dev
 
 Open http://localhost:3000.
 
-The site works without any environment variables. Add `ANTHROPIC_API_KEY` to `.env.local` to switch on the
-Claude judge, which rules on answers that aren't on a game's answer board.
+The site works without any environment variables.
 
 ## Deploy to Vercel
 
@@ -33,8 +32,7 @@ Claude judge, which rules on answers that aren't on a game's answer board.
    git push -u origin main
    ```
 2. In Vercel, choose **Add New → Project**, import the repository, and keep the defaults (Next.js is detected automatically).
-3. Under **Settings → Environment Variables**, add `ANTHROPIC_API_KEY` (and optionally `ANTHROPIC_MODEL` and
-   `NEXT_PUBLIC_SITE_URL` with your production URL), then redeploy.
+3. Optionally, under **Settings → Environment Variables**, add `NEXT_PUBLIC_SITE_URL` with your production URL, then redeploy.
 
 Every push to `main` deploys automatically; pull requests get preview URLs.
 
@@ -57,7 +55,6 @@ src/
     games/types.ts            the contract every game implements (GameModule, GameContext)
     worlds/                   pixel engine (pixel.ts), the four worlds (worlds.ts), loop (engine.ts)
     sound.ts, storage.ts      shared synth and namespaced localStorage
-    server/claude.ts          server-only Claude helper (API key never reaches the browser)
     server/rate-limit.ts      per-IP limiter for game API calls
   games/
     registry.ts               every game's title, tagline, status and cover
@@ -96,10 +93,8 @@ so it looks right in all four worlds.
 
 ## Deep Cut
 
-- Prompts live in `src/games/deep-cut/data/prompts.ts` (137 prompts, about 10,700 answers). The file header explains the format.
-- Matching, scoring and the daily seed are in `logic.ts` and run on both client and server.
-- `server.ts` has two actions: `status` (is the judge on?) and `judge` (Claude rules on an off-board answer).
-  Rulings are cached per server instance and every call is rate limited.
+- Prompts live in `src/games/deep-cut/data/prompts.ts` (157 prompts, about 11,300 answers). The file header explains the format.
+- Matching, scoring and the daily seed are in `logic.ts`. Only answers on the board count.
 
 ## Scripts
 
