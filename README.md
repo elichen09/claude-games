@@ -93,10 +93,10 @@ so it looks right in all four worlds.
 
 ## Deep Cut
 
-- Prompts live in `src/games/deep-cut/data/prompts.ts` (157 prompts). The file header explains the format.
-- `data/longtail/` adds rare-but-valid answers per prompt (about 22,700 answers in total), so niche picks count.
+- Prompts live in `src/games/deep-cut/data/prompts.ts` (187 prompts). The file header explains the format.
+- `data/longtail/` adds rare-but-valid answers per prompt (about 26,400 answers in total), so niche picks count.
   Anything a board marks `=0` stays rejected.
-- Matching, scoring and the daily seed are in `logic.ts`. Only answers on the board count.
+- Matching, scoring and the daily seed are in `logic.ts`. Only answers on the board count; small typos are autocorrected.
 
 ## Scripts
 

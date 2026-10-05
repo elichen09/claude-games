@@ -26,7 +26,7 @@ export const MODES = [
 export type ModeId = (typeof MODES)[number]["id"];
 
 export interface Answer { name: string; share: number; keys: string[]; rank: number }
-export interface Prompt { id: string; cat: string; q: string; answers: Answer[]; index: Map<string, Answer>; strip: Set<string> }
+export interface Prompt { id: string; cat: string; q: string; answers: Answer[]; index: Map<string, Answer>; strip: Set<string>; rejected: Set<string>; surnames: Set<string> }
 
 /* text normalisation: case, accents, punctuation, leading articles */
 export function norm(s: string) {
@@ -37,17 +37,19 @@ export function norm(s: string) {
 /** Matching key. Emoji-only answers keep their glyph. */
 export const key = (s: string) => norm(s).replace(/ /g, "") || String(s).replace(/[️\s]/g, "");
 
-function lev(a: string, b: string, max: number) {
+/** Edit distance where a swapped pair of letters counts as one typo; gives up once it exceeds max. */
+function typoDistance(a: string, b: string, max: number) {
   if (Math.abs(a.length - b.length) > max) return max + 1;
-  let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+  let prev2: number[] = [], prev = Array.from({ length: b.length + 1 }, (_, i) => i);
   for (let i = 1; i <= a.length; i++) {
     const cur = [i]; let best = i;
     for (let j = 1; j <= b.length; j++) {
       cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) cur[j] = Math.min(cur[j], prev2[j - 2] + 1);
       if (cur[j] < best) best = cur[j];
     }
     if (best > max) return max + 1;
-    prev = cur;
+    prev2 = prev; prev = cur;
   }
   return prev[b.length];
 }
@@ -79,14 +81,14 @@ function buildPrompts(): Prompt[] {
   for (const cat in PROMPT_BANK) for (const [id, q, people, raw] of PROMPT_BANK[cat]) {
     const strip = new Set(GENERIC);
     for (const w of norm(q).split(" ")) if (w.length >= 3 && !PROMPT_FILLER.has(w)) strip.add(w);
-    const p: Prompt = { id: cat + ":" + id, cat, q, answers: [], index: new Map(), strip };
     const rejected = new Set<string>();
+    const p: Prompt = { id: cat + ":" + id, cat, q, answers: [], index: new Map(), strip, rejected, surnames: new Set() };
     addAnswers(p, raw, DEFAULT_SHARE, rejected);
     if (LONG_TAIL[p.id]) addAnswers(p, LONG_TAIL[p.id], LONG_TAIL_SHARE, rejected);
     if (people) { // a surname counts on people prompts when it's unambiguous
       const counts = new Map<string, number>();
       for (const a of p.answers) { const w = norm(a.name).split(" "); if (w.length > 1) { const l = w[w.length - 1]; counts.set(l, (counts.get(l) || 0) + 1); } }
-      for (const a of p.answers) { const w = norm(a.name).split(" "); const l = w[w.length - 1]; if (w.length > 1 && l.length >= 4 && counts.get(l) === 1 && !p.index.has(l)) { p.index.set(l, a); a.keys.push(l); } }
+      for (const a of p.answers) { const w = norm(a.name).split(" "); const l = w[w.length - 1]; if (w.length > 1 && l.length >= 4 && counts.get(l) === 1 && !p.index.has(l)) { p.index.set(l, a); a.keys.push(l); p.surnames.add(l); } }
     }
     p.answers.sort((x, y) => y.share - x.share);
     p.answers.forEach((a, i) => (a.rank = i + 1));
@@ -104,24 +106,44 @@ function exact(p: Prompt, k: string): Answer | null {
   for (const c of [k, k.replace(/s$/, ""), k.replace(/es$/, ""), k.replace(/ies$/, "y"), k + "s", k + "es"]) if (c && p.index.has(c)) return p.index.get(c)!;
   return null;
 }
-/** Closest key within a small typo allowance. */
+/** How many typos an answer of this length may have: none for 1-3 letters, up to 3 for long names. */
+const typoAllowance = (len: number) => (len <= 3 ? 0 : len <= 6 ? 1 : len <= 10 ? 2 : 3);
+
+/**
+ * Closest key within the typo allowance; ties go to the more popular answer. Short words must keep their
+ * first letter, and bare surnames ("Holmes") only match exactly, so near-miss words aren't misread.
+ */
 function typo(p: Prompt, k: string): Answer | null {
-  if (k.length < 5) return null;
-  const max = k.length >= 9 ? 2 : 1;
+  const max = typoAllowance(k.length);
+  if (!max) return null;
   let best: Answer | null = null, bd = max + 1;
-  for (const [kk, a] of p.index) { if (kk.length < 4) continue; const d = lev(k, kk, max); if (d < bd) { bd = d; best = a; } }
+  for (const [kk, a] of p.index) {
+    if (kk.length < 4 || p.surnames.has(kk) || (kk.length <= 5 && kk[0] !== k[0])) continue;
+    const lim = Math.min(max, typoAllowance(kk.length)); // the shorter word sets the allowance
+    const d = typoDistance(k, kk, lim);
+    if (d <= lim && (d < bd || (d === bd && best && a.share > best.share))) { bd = d; best = a; }
+  }
   return bd <= max ? best : null;
 }
 
-/** Find the board answer a player meant: exact or plural, then without filler words ("Brie cheese"), then small typos. */
+/**
+ * Find the board answer a player meant: exact or plural, then without filler words ("Brie cheese"),
+ * then autocorrect small typos ("Tyranosaurus", "Ouagadougu"). Answers the board rejects never match.
+ */
 export function match(p: Prompt, input: string): Answer | null {
   const k = key(input);
   if (!k) return null;
   const words = norm(input).split(" ");
   const kept = words.filter((w) => !p.strip.has(w) && !p.strip.has(w.replace(/e?s$/, "")));
   const k2 = kept.length && kept.length < words.length ? kept.join("") : "";
-  return exact(p, k) || (k2 && exact(p, k2)) || typo(p, k) || (k2 ? typo(p, k2) : null);
+  const hit = exact(p, k) || (k2 && exact(p, k2));
+  if (hit) return hit;
+  if (p.rejected.has(k) || (k2 && p.rejected.has(k2))) return null;
+  return typo(p, k) || (k2 ? typo(p, k2) : null);
 }
+
+/** True when a match only happened through autocorrect or dropped words, so the UI can say what it was read as. */
+export const wasCorrected = (a: Answer, input: string) => !a.keys.includes(key(input));
 
 /** 40% of players → 5 points; 0.3% or rarer → 150. */
 export const pointsFor = (share: number) =>

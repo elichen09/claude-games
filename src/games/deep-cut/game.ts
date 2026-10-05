@@ -2,7 +2,7 @@
 import type { GameContext } from "@/lib/games/types";
 import type { WorldId } from "@/lib/worlds/meta";
 import {
-  CATEGORIES, MODES, PROMPTS, catName, comboMult, dailySet, key, match, pct, pointsFor, pool, shuffle, tierFor, today,
+  CATEGORIES, MODES, PROMPTS, catName, comboMult, dailySet, key, match, pct, pointsFor, pool, shuffle, tierFor, today, wasCorrected,
   type Prompt,
 } from "./logic";
 
@@ -15,7 +15,7 @@ const FLAVOR: Record<WorldId, { mul: number; go: string; tiers: string[]; lost: 
 };
 const TIER_EMOJI = ["⬜", "🟦", "🟩", "🟪", "🟨"];
 
-interface Resolved { valid: boolean; name: string; share: number; rank?: number | null }
+interface Resolved { valid: boolean; name: string; share: number; rank?: number | null; corrected?: boolean }
 
 const esc = (s: unknown) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 const tierColor = (t: number) => `var(--t${t})`;
@@ -38,7 +38,7 @@ export function mountDeepCut(root: HTMLElement, ctx: GameContext) {
 
   function resolve(p: Prompt, input: string): Resolved {
     const m = match(p, input);
-    return m ? { valid: true, name: m.name, share: m.share, rank: m.rank } : { valid: false, name: input, share: 0 };
+    return m ? { valid: true, name: m.name, share: m.share, rank: m.rank, corrected: wasCorrected(m, input) } : { valid: false, name: input, share: 0 };
   }
 
   /* ── ui helpers ── */
@@ -191,7 +191,7 @@ export function mountDeepCut(root: HTMLElement, ctx: GameContext) {
     let lifeLost = false;
     if (G.mode === "survival" && (!r.valid || t === 0)) { G.lives--; lifeLost = true; }
     G.score += pts;
-    G.results.push({ q: p.q, pid: p.id, input, valid: r.valid, name: r.name, share: r.share, rank: r.rank, tier: t, pts, mult: comboMult(G.combo), lifeLost });
+    G.results.push({ q: p.q, pid: p.id, input, valid: r.valid, name: r.name, share: r.share, rank: r.rank, corrected: r.corrected, tier: t, pts, mult: comboMult(G.combo), lifeLost });
     G.phase = "reveal";
     setDepth(G.score);
     if (r.valid) { ctx.sound.reward(t); if (t >= 3) ctx.world.burst(t); if (t === 4) { document.body.classList.remove("shakescreen"); void document.body.offsetWidth; document.body.classList.add("shakescreen"); } }
@@ -226,7 +226,7 @@ export function mountDeepCut(root: HTMLElement, ctx: GameContext) {
     el.innerHTML = `
       <div class="verdict pop">
         <span class="tier" style="color:${r.valid ? tierColor(r.tier) : "var(--bad)"}">${tierName}</span>
-        <span class="what">${r.valid ? `<b>${esc(r.name)}</b>: ${r.share >= 0.1 ? "about " : ""}${pct(r.share)} of players say this${r.rank ? ` (#${r.rank})` : ""}.` : `“${esc(r.input)}” isn't on the board.`}</span>
+        <span class="what">${r.valid ? `<b>${esc(r.name)}</b>: ${r.share >= 0.1 ? "about " : ""}${pct(r.share)} of players say this${r.rank ? ` (#${r.rank})` : ""}.${r.corrected ? ` <span class="note">Read “${esc(r.input)}” as ${esc(r.name)}.</span>` : ""}` : `“${esc(r.input)}” isn't on the board.`}</span>
         <span class="pts" style="color:${r.valid ? tierColor(r.tier) : "var(--muted)"}">+${fmt(r.pts)}${r.mult > 1 && r.valid ? ` <small class="note">combo ×${r.mult}</small>` : ""}</span>
         ${r.lifeLost ? `<span class="note" style="color:var(--bad)">${r.valid ? "Too obvious. " : ""}You lost a life.</span>` : ""}
       </div>
