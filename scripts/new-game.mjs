@@ -3,6 +3,7 @@
 // Copies src/games/_template, fills in names, and registers the game (status "hidden" until you flip it to "live").
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const [slug, ...titleParts] = process.argv.slice(2);
 const title = titleParts.join(" ").trim();
@@ -11,7 +12,7 @@ if (!slug || !/^[a-z][a-z0-9-]*$/.test(slug) || !title) {
   process.exit(1);
 }
 
-const root = path.resolve(path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1")), "..");
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const games = path.join(root, "src", "games");
 const dest = path.join(games, slug);
 if (fs.existsSync(dest)) { console.error(`src/games/${slug} already exists.`); process.exit(1); }
