@@ -1,5 +1,6 @@
 /* Deep Cut rules: prompt index, answer matching and scoring. Pure functions, used by the browser and the server. */
 import { PROMPT_BANK } from "./data/prompts";
+import { LONG_TAIL } from "./data/longtail";
 
 export const CATEGORIES = [
   { id: "sports", name: "Sports", blurb: "Athletes, teams, gear" },
@@ -25,7 +26,7 @@ export const MODES = [
 export type ModeId = (typeof MODES)[number]["id"];
 
 export interface Answer { name: string; share: number; keys: string[]; rank: number }
-export interface Prompt { id: string; cat: string; q: string; answers: Answer[]; index: Map<string, Answer> }
+export interface Prompt { id: string; cat: string; q: string; answers: Answer[]; index: Map<string, Answer>; strip: Set<string> }
 
 /* text normalisation: case, accents, punctuation, leading articles */
 export function norm(s: string) {
@@ -51,21 +52,37 @@ function lev(a: string, b: string, max: number) {
   return prev[b.length];
 }
 
+/** Long-tail answers with no share given are treated as very rare. */
+const DEFAULT_SHARE = 0.4, LONG_TAIL_SHARE = 0.15;
+
+/* Words a player may tack onto an answer without changing it ("Brie cheese", "Bernabeu Stadium"). */
+const GENERIC = new Set("the a an of type kind brand famous stadium arena park national club fc cf city movie film song band game show series tv breed species animal dish flavor flavour sauce drink team character player app website channel company sport".split(" "));
+const PROMPT_FILLER = new Set("name any era like with from you your which whose has have its one only just than most more also known usually mostly real that isnt not and for".split(" "));
+
+/** Adds "Name/alias=share|…" answers. Entries marked =0 are recorded as rejected and never added later. */
+function addAnswers(p: Prompt, raw: string, defShare: number, rejected: Set<string>) {
+  for (const item of raw.split("|")) {
+    const [names, sh] = item.split("=");
+    const share = sh === undefined ? defShare : parseFloat(sh);
+    const parts = names.split("/").map((x) => x.trim()).filter(Boolean);
+    if (!(share > 0)) { for (const n of parts) rejected.add(key(n)); continue; }
+    const display = parts[0];
+    if (!display || p.index.has(key(display)) || rejected.has(key(display))) continue; // duplicate or rejected
+    const a: Answer = { name: display, share, keys: [], rank: 0 };
+    for (const n of parts) { const k = key(n); if (k && !p.index.has(k) && !rejected.has(k)) { p.index.set(k, a); a.keys.push(k); } }
+    if (a.keys.length) p.answers.push(a);
+  }
+}
+
 function buildPrompts(): Prompt[] {
   const out: Prompt[] = [];
   for (const cat in PROMPT_BANK) for (const [id, q, people, raw] of PROMPT_BANK[cat]) {
-    const p: Prompt = { id: cat + ":" + id, cat, q, answers: [], index: new Map() };
-    for (const item of raw.split("|")) {
-      const [names, sh] = item.split("=");
-      const share = sh === undefined ? 0.4 : parseFloat(sh);
-      if (!(share > 0)) continue;
-      const parts = names.split("/").map((x) => x.trim()).filter(Boolean);
-      const display = parts[0];
-      if (!display || p.index.has(key(display))) continue; // duplicate entry
-      const a: Answer = { name: display, share, keys: [], rank: 0 };
-      for (const n of parts) { const k = key(n); if (k && !p.index.has(k)) { p.index.set(k, a); a.keys.push(k); } }
-      p.answers.push(a);
-    }
+    const strip = new Set(GENERIC);
+    for (const w of norm(q).split(" ")) if (w.length >= 3 && !PROMPT_FILLER.has(w)) strip.add(w);
+    const p: Prompt = { id: cat + ":" + id, cat, q, answers: [], index: new Map(), strip };
+    const rejected = new Set<string>();
+    addAnswers(p, raw, DEFAULT_SHARE, rejected);
+    if (LONG_TAIL[p.id]) addAnswers(p, LONG_TAIL[p.id], LONG_TAIL_SHARE, rejected);
     if (people) { // a surname counts on people prompts when it's unambiguous
       const counts = new Map<string, number>();
       for (const a of p.answers) { const w = norm(a.name).split(" "); if (w.length > 1) { const l = w[w.length - 1]; counts.set(l, (counts.get(l) || 0) + 1); } }
@@ -82,18 +99,28 @@ export const PROMPTS = buildPrompts();
 const BY_ID = new Map(PROMPTS.map((p) => [p.id, p]));
 export const getPrompt = (id: string) => BY_ID.get(id);
 
-/** Find the board answer a player meant: exact key, plural, then a small typo allowance. */
-export function match(p: Prompt, input: string): Answer | null {
-  const k = key(input);
-  if (!k) return null;
-  if (p.index.has(k)) return p.index.get(k)!;
-  if (k.endsWith("s") && p.index.has(k.slice(0, -1))) return p.index.get(k.slice(0, -1))!;
-  if (p.index.has(k + "s")) return p.index.get(k + "s")!;
+/** Exact key, or a singular/plural variant of it. */
+function exact(p: Prompt, k: string): Answer | null {
+  for (const c of [k, k.replace(/s$/, ""), k.replace(/es$/, ""), k.replace(/ies$/, "y"), k + "s", k + "es"]) if (c && p.index.has(c)) return p.index.get(c)!;
+  return null;
+}
+/** Closest key within a small typo allowance. */
+function typo(p: Prompt, k: string): Answer | null {
   if (k.length < 5) return null;
   const max = k.length >= 9 ? 2 : 1;
   let best: Answer | null = null, bd = max + 1;
   for (const [kk, a] of p.index) { if (kk.length < 4) continue; const d = lev(k, kk, max); if (d < bd) { bd = d; best = a; } }
   return bd <= max ? best : null;
+}
+
+/** Find the board answer a player meant: exact or plural, then without filler words ("Brie cheese"), then small typos. */
+export function match(p: Prompt, input: string): Answer | null {
+  const k = key(input);
+  if (!k) return null;
+  const words = norm(input).split(" ");
+  const kept = words.filter((w) => !p.strip.has(w) && !p.strip.has(w.replace(/e?s$/, "")));
+  const k2 = kept.length && kept.length < words.length ? kept.join("") : "";
+  return exact(p, k) || (k2 && exact(p, k2)) || typo(p, k) || (k2 ? typo(p, k2) : null);
 }
 
 /** 40% of players → 5 points; 0.3% or rarer → 150. */
