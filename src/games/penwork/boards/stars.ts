@@ -1,12 +1,10 @@
 /* Stars board: tap cycles empty → dot → star; drag from an empty cell paints dots; right-click or long-press toggles a star. */
 import { starConflicts, starsSolved, type StarsPuzzle } from "../logic/stars";
-import { History, lightWorld, type Board } from "../shell";
+import { History, type Board } from "../shell";
 
-/** n distinct soft region colours that suit the world (pastel on light worlds, deep tints on dark ones). */
-export function regionColors(n: number) {
-  const light = lightWorld();
-  return Array.from({ length: n }, (_, i) => `hsl(${Math.round((i * 360) / n + 15) % 360} ${light ? 55 : 35}% ${light ? 82 : 30}%)`);
-}
+/** Bright paper pastels, picked to stay apart from each other, so the board reads the same in every world. */
+const PASTELS = ["#f7c59f", "#b8dcf5", "#c8e6a8", "#f5b3c8", "#f9e79a", "#d2c1f2", "#a6e3d6", "#e0cfb1", "#f4a6a0", "#cfd8dc"];
+export const regionColors = (n: number) => PASTELS.slice(0, n);
 
 export function starsBoard(p: StarsPuzzle, solved: () => void, changed: () => void): Board {
   const { n, k, regions } = p, sol = new Set(p.solution);
@@ -37,7 +35,7 @@ export function starsBoard(p: StarsPuzzle, solved: () => void, changed: () => vo
     const bad = starConflicts(p, stars);
     cells.forEach((b, i) => {
       const v = state[i];
-      b.textContent = v === 2 ? "★" : v === 1 ? "·" : "";
+      b.textContent = v === 2 ? "★" : "";
       b.classList.toggle("star", v === 2); b.classList.toggle("dot", v === 1); b.classList.toggle("bad", bad.has(i));
     });
     changed();

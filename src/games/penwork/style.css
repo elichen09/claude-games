@@ -50,7 +50,7 @@
 .pw-stars .pw-cell { font-size: calc(var(--cell) * .55); line-height: 1; }
 .pw-stars .pw-cell.bt { border-top: 3px solid var(--ink); } .pw-stars .pw-cell.bb { border-bottom: 3px solid var(--ink); }
 .pw-stars .pw-cell.bl { border-left: 3px solid var(--ink); } .pw-stars .pw-cell.br { border-right: 3px solid var(--ink); }
-.pw-stars .pw-cell.dot { color: rgba(29,26,46,.55); font-size: calc(var(--cell) * .7); }
+.pw-stars .pw-cell.dot::after { content: ""; width: 16%; height: 16%; background: rgba(29,26,46,.6); }
 .pw-stars .pw-cell.star { color: var(--ink); text-shadow: 1px 1px 0 rgba(255,255,255,.4); }
 .pw-stars .pw-cell.star.bad { color: #d6293e; }
 .pw-stars .pw-cell.bad:not(.star):not(.dot) { box-shadow: inset 0 0 0 2px rgba(214,41,62,.5); }
