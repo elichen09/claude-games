@@ -1,69 +1,89 @@
 /* Off the Map — game styles, scoped under .otm. Colors and fonts come from the shared world tokens. */
 .otm { display: grid; gap: 16px; }
 .otm-canvas { display: block; width: 100%; height: auto; image-rendering: pixelated; image-rendering: crisp-edges; }
-.otm h2 { margin: 0; font-family: var(--display); font-weight: 600; font-size: calc(clamp(19px, 3.6vw, 26px) * var(--dsize)); line-height: 1.2; text-wrap: balance; }
+.otm h2 { margin: 0; font-family: var(--display); font-weight: 600; font-size: calc(clamp(19px, 3.6vw, 26px) * var(--dsize)); line-height: 1.22; text-wrap: balance; }
 .otm h2 b { color: var(--accent); font-weight: inherit; }
 .otm-prompt { gap: 8px; }
-.otm-prompt .note { margin: 0; }
 
 /* menu */
 .otm-hero h1 { font-size: calc(clamp(34px, 8vw, 60px) * var(--dsize)); }
 .otm-hero p { margin: 0; color: var(--muted); max-width: 58ch; }
-.otm-modes { display: grid; gap: 12px; }
-.otm-mode { grid-template-columns: 132px minmax(0, 1fr) auto; align-items: center; gap: 16px; padding: 14px; }
-.otm-mode-txt { display: grid; gap: 2px; }
-.otm-mode-txt b { font-family: var(--display); font-size: calc(19px * var(--dsize)); }
+.otm-modes { display: grid; gap: 14px; }
+.otm-mode { grid-template-columns: 190px minmax(0, 1fr); align-items: center; gap: 18px; padding: 16px; }
+.otm-prev { background: #050914; display: grid; place-items: center; }
+[data-world="collage"] .otm-prev { background: #e9eef8; }
+.otm-mode-txt { display: grid; gap: 3px; }
+.otm-mode-txt b { font-family: var(--display); font-size: calc(24px * var(--dsize)); }
 .otm-mode-txt small { font-family: var(--label); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--accent2); }
-.otm-mode-txt p { margin: 4px 0 0; color: var(--muted); font-size: .88em; line-height: 1.2; }
-.otm-meta { font-family: var(--label); font-size: 11px; color: var(--accent); margin-top: 4px; }
-.otm-mode-btns { display: grid; gap: 6px; }
-.otm-mode-btns .go { padding: 10px 16px; font-size: calc(15px * var(--dsize)); }
-.otm-prev { display: grid; place-items: center; background: var(--panel2); padding: 6px; aspect-ratio: 2 / 1; }
-.otm-prev canvas { width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; }
+.otm-mode-txt p { margin: 4px 0 0; color: var(--muted); line-height: 1.25; }
+.otm-meta { font-family: var(--label); font-size: 11px; color: var(--accent); margin-top: 2px; }
+.otm-mode-btns { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+.otm-mode-btns .go { padding: 11px 18px; font-size: calc(15px * var(--dsize)); }
 
-/* in-game */
+/* in-game frame */
 .otm-hud { display: flex; align-items: center; gap: 10px; padding: 8px 12px; flex-wrap: wrap; }
 .otm-hud .sp { flex: 1; }
 .otm-back { background: var(--panel2); border: 0; padding: 6px 10px; font-family: var(--label); font-size: 12px; color: var(--fg); }
 .otm-hud-mode, .otm-round { font-family: var(--label); font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
 .otm-hud .otm-hud-mode { color: var(--fg); }
+.otm-badge { font-family: var(--label); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; background: var(--t4); color: #1a1205; padding: 3px 8px; }
 .otm-total { font-family: var(--display); font-size: calc(18px * var(--dsize)); color: var(--accent); font-variant-numeric: tabular-nums; }
-.otm-stage { display: grid; gap: 16px; }
-.otm-round-host { display: grid; gap: 16px; }
+.otm-stage, .otm-round-host { display: grid; gap: 16px; }
 .otm-loading { font-family: var(--label); letter-spacing: .1em; }
 .otm-viz { gap: 12px; }
-.otm-globe-wrap { width: min(100%, 460px); margin: 0 auto; cursor: grab; }
+.otm-globe-wrap { position: relative; width: min(100%, 470px); margin: -6px auto 0; cursor: grab; background: radial-gradient(circle at 50% 50%, #0b1630 0 45%, #050914 75%); }
+[data-world="collage"] .otm-globe-wrap { background: radial-gradient(circle at 50% 50%, #f4f7ff 0 45%, #dfe6f5 75%); }
 .otm-globe-wrap:active { cursor: grabbing; }
-.otm-map-wrap { width: 100%; margin: 0 auto; background: var(--bg); }
-.otm-map-wrap .otm-map { cursor: crosshair; }
-.otm-map-wrap .otm-rivers { max-width: 520px; margin: 0 auto; }
-.otm-map-wrap .otm-hills { cursor: ew-resize; touch-action: none; }
-.otm-fact, .otm-hint { margin: 0; color: var(--fg); }
-.otm-hint:empty { display: none; }
-.otm-fact b, .otm-hint b, .otm-msg b { color: var(--accent); }
+.otm-skip { position: absolute; right: 8px; bottom: 8px; padding: 6px 10px; font-size: 11px; }
 
+/* answers */
 .otm-guess { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
-.otm-guess .go { padding: 10px 18px; font-size: calc(16px * var(--dsize)); }
+.otm-guess .go { padding: 10px 20px; font-size: calc(16px * var(--dsize)); }
 .otm-msg { grid-column: 1 / -1; min-height: 1.3em; color: var(--muted); }
 .otm-msg.good { color: var(--good); }
 .otm-msg.bad { color: var(--bad); }
+.otm-msg b, .otm-fact b { color: var(--accent); }
 
+.otm-choices { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.otm-choice { text-align: left; background: var(--panel2); border: 0; padding: 12px 14px; color: var(--fg); display: grid; gap: 2px; box-shadow: inset 0 -4px 0 rgba(0,0,0,.28); transition: transform .1s; }
+.otm-choice:hover:not(:disabled) { transform: translateY(-2px); }
+.otm-choice b { font-family: var(--display); font-size: calc(17px * var(--dsize)); }
+.otm-choice small { color: var(--muted); font-size: .8em; }
+.otm-choice:disabled { cursor: default; opacity: .55; }
+.otm-choice.right { background: var(--good); color: var(--ink); opacity: 1; }
+.otm-choice.wrong { background: var(--bad); color: var(--ink); opacity: 1; }
+.otm-choice.right small, .otm-choice.wrong small { color: var(--ink); }
+
+.otm-verdict { display: grid; gap: 6px; background: var(--panel2); padding: 12px 14px; }
+.otm-verdict[hidden] { display: none; }
+.otm-tier { font-family: var(--display); font-size: calc(clamp(24px, 5vw, 34px) * var(--dsize)); line-height: 1.1; color: var(--t0); text-transform: uppercase; }
+.otm-tier.t1 { color: var(--t1); } .otm-tier.t2 { color: var(--t2); } .otm-tier.t3 { color: var(--t3); } .otm-tier.t4 { color: var(--t4); text-shadow: 3px 3px 0 rgba(0,0,0,.35); }
+.otm-fact { margin: 0; color: var(--fg); }
+
+/* Same Latitude: clock and letter slots */
+.otm-clock { position: absolute; left: 10px; top: 10px; z-index: 2; font-family: var(--display); font-size: calc(30px * var(--dsize)); line-height: 1; color: #fff; text-shadow: 3px 3px 0 rgba(0,0,0,.55); font-variant-numeric: tabular-nums; pointer-events: none; }
+.otm-clock.low { color: var(--bad); animation: blink .5s steps(2) infinite; }
+.otm-clock.hit { animation: otm-hit .5s steps(5); }
+.otm-clock.miss { animation: shake .4s steps(6); color: var(--bad); }
+@keyframes otm-hit { 0% { transform: scale(1.5); color: var(--good); } 100% { transform: scale(1); } }
 .otm-timer { height: 8px; background: var(--panel2); }
-.otm-timer span { display: block; height: 100%; width: 100%; background: var(--accent2); transition: width .25s linear; }
-.otm-status { display: flex; gap: 12px; align-items: center; font-family: var(--label); font-size: 12px; letter-spacing: .1em; text-transform: uppercase; }
-.otm-status #strikes { color: var(--bad); flex: 1; }
-.otm-status .ghost { padding: 6px 10px; font-size: 11px; }
-.otm-chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.otm-chip { background: var(--accent); color: var(--ink); font-family: var(--label); font-size: 11px; padding: 3px 8px; animation: pop .35s steps(4); }
+.otm-timer span { display: block; height: 100%; width: 100%; background: linear-gradient(90deg, var(--bad), var(--t4) 35%, var(--good)); }
+.otm-slots { display: flex; flex-wrap: wrap; gap: 8px 12px; }
+.otm-slot { display: inline-flex; gap: 2px; padding: 4px; background: var(--panel2); }
+.otm-slot i { font-style: normal; width: 13px; height: 18px; display: grid; place-items: center; font-family: var(--label); font-size: 11px; text-transform: uppercase; background: var(--bg); color: transparent; box-shadow: inset 0 -2px 0 var(--line); }
+.otm-slot i.gap { width: 6px; background: none; box-shadow: none; }
+.otm-slot i.on { color: var(--fg); animation: pop .3s steps(4); }
+.otm-slot i.hinted { color: var(--t4); }
+.otm-slot.found i { background: var(--accent); color: var(--ink); box-shadow: none; }
+.otm-slot.missed i { background: transparent; color: var(--bad); box-shadow: inset 0 -2px 0 var(--bad); }
+.otm-status { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.otm-status .sp { flex: 1; }
+.otm-status .ghost { padding: 7px 10px; font-size: 11px; }
+.otm-status .ghost:disabled { opacity: .5; }
 
-.otm-timeline { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: center; font-family: var(--label); font-size: 11px; letter-spacing: .1em; color: var(--muted); }
-.otm-timeline #ma { color: var(--accent); min-width: 6ch; }
-.otm-track { height: 6px; background: var(--panel2); }
-.otm-track span { display: block; height: 100%; width: 0; background: var(--accent); }
-
+/* between rounds and results */
 .otm-next { grid-template-columns: minmax(0, 1fr) auto; align-items: center; animation: pop .35s steps(4); }
 .otm-earn b { font-family: var(--display); font-size: calc(24px * var(--dsize)); color: var(--accent); }
-
 .otm-results h1 { font-size: calc(clamp(36px, 8vw, 58px) * var(--dsize)); }
 .otm-results h1 small { font-size: .4em; color: var(--muted); }
 .otm-best { margin: 0; font-family: var(--label); color: var(--accent); letter-spacing: .14em; text-transform: uppercase; }
@@ -72,7 +92,8 @@
 .otm-recap b { font-family: var(--display); color: var(--accent); font-variant-numeric: tabular-nums; }
 
 @media (max-width: 640px) {
-  .otm-mode { grid-template-columns: 96px minmax(0, 1fr); }
-  .otm-mode-btns { grid-column: 1 / -1; grid-template-columns: 1fr 1fr; }
+  .otm-mode { grid-template-columns: 1fr; }
+  .otm-prev { max-width: 220px; margin: 0 auto; width: 100%; }
   .otm-next { grid-template-columns: 1fr; }
+  .otm-choices { grid-template-columns: 1fr; }
 }

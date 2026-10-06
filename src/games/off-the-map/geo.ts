@@ -5,7 +5,7 @@ import { feature, mesh } from "topojson-client";
 import type { GeometryCollection, Topology } from "topojson-specification";
 import atlasJson from "world-atlas/countries-110m.json";
 import { CITIES } from "./data/cities";
-import { COUNTRY_DATA, type Continent, type Plate } from "./data/countries";
+import { COUNTRY_DATA, type Continent } from "./data/countries";
 
 export type LonLat = [number, number];
 export type Shape = Feature<Polygon | MultiPolygon, { name: string }>;
@@ -16,7 +16,6 @@ export interface Country {
   keys: string[]; // normalised names a player may type
   continent: Continent;
   pop: number; // millions
-  plate: Plate;
   sovereign: boolean;
   shape: Shape;
   areaKm2: number;
@@ -38,10 +37,10 @@ const squash = (s: string) => norm(s).replace(/ /g, "");
 
 export const COUNTRIES: Country[] = shapes.map((shape) => {
   const key = shape.properties.name;
-  const [name, aliases, continent, pop, plate, sovereign] = COUNTRY_DATA[key] ?? [key, "", "Asia", 1, "EU", false];
+  const [name, aliases, continent, pop, sovereign] = COUNTRY_DATA[key] ?? [key, "", "Asia", 1, false];
   const areaKm2 = geoArea(shape) * 6371 * 6371;
   const keys = [...new Set([key, name, ...aliases.split("/")].filter(Boolean).map(squash))];
-  return { key, name, keys, continent, pop, plate, sovereign, shape, areaKm2, density: (pop * 1e6) / areaKm2, centroid: geoCentroid(shape) as LonLat, bounds: geoBounds(shape) as [LonLat, LonLat] };
+  return { key, name, keys, continent, pop, sovereign, shape, areaKm2, density: (pop * 1e6) / areaKm2, centroid: geoCentroid(shape) as LonLat, bounds: geoBounds(shape) as [LonLat, LonLat] };
 });
 export const byKey = new Map(COUNTRIES.map((c) => [c.key, c]));
 export const LAND: FeatureCollection = { type: "FeatureCollection", features: COUNTRIES.map((c) => c.shape) };
@@ -125,3 +124,36 @@ export function pick<T>(list: T[], n: number, rnd: () => number, weight: (t: T) 
 }
 /** Points for how close a guess landed: 1000 for a bullseye, fading with distance. */
 export const pointsForKm = (km: number, scale: number) => (km < 50 ? 1000 : Math.round(1000 * Math.exp(-km / scale)));
+
+/** Remote islands too small for the 110m map, so "nearest land" facts don't skip them: [name, lat, lon]. */
+const ISLANDS: [string, number, number][] = [
+  ["Tahiti", -17.65, -149.43], ["the Tuamotus", -16.5, -144], ["the Marquesas", -9, -139.5], ["the Gambier Islands", -23.1, -134.97], ["Pitcairn", -25.07, -130.1],
+  ["Easter Island", -27.12, -109.35], ["the Galápagos", -0.7, -90.5], ["Hawaii", 19.6, -155.5], ["Midway", 28.2, -177.4], ["the Cook Islands", -21.2, -159.8],
+  ["Samoa", -13.8, -172], ["Tonga", -21.2, -175.2], ["Kiritimati", 1.87, -157.4], ["Tarawa", 1.45, 173], ["the Marshall Islands", 7.1, 171.2],
+  ["Pohnpei", 6.9, 158.2], ["Guam", 13.44, 144.79], ["Palau", 7.5, 134.6], ["Tuvalu", -8.5, 179.2], ["Nauru", -0.52, 166.9], ["Norfolk Island", -29, 168],
+  ["Lord Howe Island", -31.55, 159.08], ["the Chatham Islands", -44, -176.5], ["Macquarie Island", -54.6, 158.9], ["the Juan Fernández Islands", -33.6, -78.8],
+  ["Clipperton Island", 10.3, -109.2], ["the Revillagigedo Islands", 18.8, -111], ["the Aleutians", 52, -175], ["the Azores", 37.8, -25.5], ["Bermuda", 32.3, -64.8],
+  ["the Canary Islands", 28.3, -16.5], ["Cape Verde", 16, -24], ["Saint Helena", -15.96, -5.7], ["Ascension Island", -7.95, -14.36], ["Tristan da Cunha", -37.1, -12.3],
+  ["South Georgia", -54.3, -36.5], ["Bouvet Island", -54.4, 3.4], ["Mauritius", -20.2, 57.5], ["Réunion", -21.1, 55.5], ["the Seychelles", -4.6, 55.5],
+  ["the Maldives", 3.2, 73.2], ["the Chagos Islands", -7.3, 72.4], ["Heard Island", -53.1, 73.5], ["the Crozet Islands", -46.4, 51.8], ["Amsterdam Island", -37.8, 77.5],
+  ["Christmas Island", -10.5, 105.7], ["the Cocos Islands", -12.2, 96.8], ["Svalbard", 78, 16], ["Jan Mayen", 71, -8.4], ["the Faroe Islands", 62, -7],
+  ["Fernando de Noronha", -3.85, -32.42], ["the Falklands", -51.7, -59.5], ["Wallis and Futuna", -13.3, -176.2], ["Niue", -19.05, -169.87], ["the Kermadec Islands", -29.25, -177.9],
+];
+
+/** The closest land to a point (a country's coastline or a remote island), with its distance. */
+export function nearestLand(p: LonLat): { name: string; km: number } {
+  let best = "", bd = Infinity;
+  for (const c of COUNTRIES) {
+    const polys = c.shape.geometry.type === "Polygon" ? [c.shape.geometry.coordinates] : c.shape.geometry.coordinates;
+    for (const poly of polys) for (const q of poly[0]) { const d = geoDistance(p, q as LonLat); if (d < bd) { bd = d; best = c.name; } }
+  }
+  for (const [name, lat, lon] of ISLANDS) { const d = geoDistance(p, [lon, lat]); if (d < bd) { bd = d; best = name; } }
+  return { name: best, km: bd * KM_PER_RAD };
+}
+
+/** The best-known city closest to a point. */
+export function nearestCity(p: LonLat, except?: CityInfo): { city: CityInfo; km: number } {
+  let best = CITY_LIST[0], bd = Infinity;
+  for (const c of CITY_LIST) { if (c === except) continue; const d = distanceKm(p, c.at); if (d < bd) { bd = d; best = c; } }
+  return { city: best, km: bd };
+}
