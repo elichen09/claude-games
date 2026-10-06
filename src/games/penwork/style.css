@@ -1,0 +1,92 @@
+/* Penwork — pen-and-paper look on top of the shared world tokens. Scoped under .pw. */
+.pw { display: grid; gap: 16px; --ink: #1d1a2e; --paper: #fbf7ee; --pw-green: #6fbf73; --pw-blue: #5b9bd5; }
+.pw .eyebrow { display: block; }
+
+/* menu */
+.pw-hero h1 { font-size: calc(clamp(34px, 8vw, 60px) * var(--dsize)); }
+.pw-hero p { margin: 0; color: var(--muted); max-width: 58ch; }
+.pw-cards { display: grid; gap: 12px; }
+.pw-card { grid-template-columns: 84px minmax(0, 1fr) auto; align-items: center; gap: 16px; padding: 14px 16px; }
+.pw-art svg { width: 84px; height: 84px; display: block; box-shadow: 3px 3px 0 rgba(0,0,0,.3); }
+.pw-card-txt { display: grid; gap: 2px; }
+.pw-card-txt b { font-family: var(--display); font-size: calc(22px * var(--dsize)); }
+.pw-card-txt small { font-family: var(--label); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--accent2); }
+.pw-meta { color: var(--muted); font-size: .9em; }
+.pw-card-btns { display: grid; gap: 6px; justify-items: stretch; }
+.pw-card-btns .go { padding: 10px 18px; font-size: calc(15px * var(--dsize)); }
+.pw-practice { display: flex; gap: 4px; }
+.pw-practice .ghost { padding: 6px 8px; font-size: 11px; flex: 1; }
+.pw-loading { font-family: var(--label); letter-spacing: .08em; }
+
+/* frame */
+.pw-bar { display: flex; align-items: center; gap: 10px; padding: 8px 12px; flex-wrap: wrap; }
+.pw-bar .sp { flex: 1; }
+.pw-back { background: var(--panel2); border: 0; padding: 6px 10px; font-family: var(--label); font-size: 12px; color: var(--fg); }
+.pw-title { font-family: var(--display); font-size: calc(18px * var(--dsize)); }
+.pw-label { font-family: var(--label); font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+.pw-timer { font-family: var(--display); font-size: calc(20px * var(--dsize)); color: var(--accent); font-variant-numeric: tabular-nums; }
+.pw-play { gap: 12px; }
+.pw-rules summary { cursor: pointer; font-family: var(--label); font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--accent2); }
+.pw-rules p { margin: 6px 0 0; color: var(--fg); }
+.pw-rules .pw-g { color: var(--pw-green); } .pw-rules .pw-u { color: var(--pw-blue); }
+.pw-board-host { display: grid; place-items: center; }
+.pw-tools { display: flex; gap: 8px; align-items: center; }
+.pw-tools .sp { flex: 1; }
+.pw-msg { margin: 0; min-height: 1.3em; color: var(--muted); }
+.pw-msg.good { color: var(--good); } .pw-msg.bad { color: var(--bad); }
+.pw-win h2 { font-size: calc(clamp(26px, 6vw, 40px) * var(--dsize)); }
+.pw-play.solved .pw-tools { opacity: .4; pointer-events: none; }
+
+/* shared grid */
+.pw-grid { --cell: min(calc((min(100vw, 680px) - 80px) / var(--n)), 54px); display: grid; grid-template-columns: repeat(var(--n), var(--cell)); grid-auto-rows: var(--cell); background: var(--ink); padding: 3px; gap: 0; touch-action: none; user-select: none; -webkit-user-select: none; box-shadow: 4px 4px 0 rgba(0,0,0,.35); }
+.pw-cell { border: 0; padding: 0; margin: 0; display: grid; place-items: center; font-family: var(--display); color: var(--ink); cursor: pointer; position: relative; box-shadow: inset 0 0 0 .5px rgba(29,26,46,.35); transition: background-color .12s; }
+.pw-cell:focus-visible { outline: 3px solid var(--accent); outline-offset: -3px; z-index: 1; }
+@keyframes pw-wrong { 0%, 100% { box-shadow: inset 0 0 0 .5px rgba(29,26,46,.35); } 20%, 60% { box-shadow: inset 0 0 0 4px var(--bad); } }
+.pw-cell.wrong { animation: pw-wrong 1.2s steps(6); }
+.pw-grid.won { animation: pop .5s steps(5); }
+
+/* Stars */
+.pw-stars .pw-cell { font-size: calc(var(--cell) * .55); line-height: 1; }
+.pw-stars .pw-cell.bt { border-top: 3px solid var(--ink); } .pw-stars .pw-cell.bb { border-bottom: 3px solid var(--ink); }
+.pw-stars .pw-cell.bl { border-left: 3px solid var(--ink); } .pw-stars .pw-cell.br { border-right: 3px solid var(--ink); }
+.pw-stars .pw-cell.dot { color: rgba(29,26,46,.55); font-size: calc(var(--cell) * .7); }
+.pw-stars .pw-cell.star { color: var(--ink); text-shadow: 1px 1px 0 rgba(255,255,255,.4); }
+.pw-stars .pw-cell.star.bad { color: #d6293e; }
+.pw-stars .pw-cell.bad:not(.star):not(.dot) { box-shadow: inset 0 0 0 2px rgba(214,41,62,.5); }
+.pw-stars.won .pw-cell.star { color: #b8860b; animation: pop .5s steps(4); }
+
+/* Fields */
+.pw-fields .pw-cell { background: var(--paper); font-family: var(--body); font-size: calc(var(--cell) * .62); line-height: 1; }
+.pw-fields.dark .pw-cell { background: #d9d4c6; }
+.pw-fields .pw-cell.g { background: var(--pw-green); color: #14301a; }
+.pw-fields .pw-cell.u { background: var(--pw-blue); color: #0d2741; }
+.pw-fields .pw-cell.sr { border-right: 2px solid var(--ink); } .pw-fields .pw-cell.sb { border-bottom: 2px solid var(--ink); }
+.pw-fields .pw-cell.given::after { content: ""; position: absolute; left: 4px; top: 4px; width: 5px; height: 5px; background: rgba(29,26,46,.55); }
+.pw-fields .pw-cell.bad { box-shadow: inset 0 0 0 3px #d6293e; }
+.pw-fields.won .pw-cell { animation: pop .45s steps(4); }
+
+/* River */
+.pw-river { width: min(100%, 520px); display: grid; gap: 6px; }
+.pw-river svg { width: 100%; height: auto; touch-action: none; user-select: none; display: block; box-shadow: 4px 4px 0 rgba(0,0,0,.35); cursor: crosshair; }
+.pw-river-bg { fill: var(--paper); }
+.pw-river-grid { stroke: rgba(29,26,46,.12); stroke-width: .3; }
+.pw-edge { stroke: transparent; stroke-width: 3.2; stroke-linecap: round; }
+.pw-edge.on { stroke: var(--pw-blue); }
+.pw-edge.clue { stroke: var(--ink); stroke-width: 3.6; }
+@keyframes pw-edge-wrong { 0%, 100% { stroke: var(--pw-blue); } 25%, 75% { stroke: #d6293e; } }
+.pw-edge.wrong { animation: pw-edge-wrong 1.2s steps(6); }
+.pw-dot { fill: rgba(29,26,46,.45); }
+.pw-dot.full { fill: var(--ink); }
+.pw-dot.bad { fill: #d6293e; r: 2.2px; }
+.pw-flow { fill: none; stroke: #bfe6ff; stroke-width: 1.2; stroke-dasharray: 3 4; stroke-linecap: round; opacity: 0; }
+.pw-river.won .pw-flow { opacity: 1; animation: pw-flow 1.2s linear infinite; }
+.pw-river.won .pw-edge.on, .pw-river.won .pw-edge.clue { stroke: #3b82c4; }
+@keyframes pw-flow { to { stroke-dashoffset: -14; } }
+.pw-loops { margin: 0; min-height: 1.2em; color: var(--bad); font-size: .9em; }
+
+@media (max-width: 640px) {
+  .pw-card { grid-template-columns: 64px minmax(0, 1fr); }
+  .pw-art svg { width: 64px; height: 64px; }
+  .pw-card-btns { grid-column: 1 / -1; grid-template-columns: auto 1fr; align-items: center; }
+  .pw-grid { --cell: calc((100vw - 64px) / var(--n)); }
+}

@@ -27,6 +27,17 @@ export const GAMES: GameManifest[] = [
     tags: ["Geography", "Maps", "Puzzle"],
     badges: ["Daily", "3 modes"],
   },
+  {
+    slug: "penwork",
+    title: "Penwork",
+    tagline: "Daily pen-and-paper logic: place the stars, paint the fields, draw the river.",
+    description:
+      "Three daily logic puzzles, easy on Monday and tough by Sunday: Stars (stars in every row, column and region, never touching), Fields (green and blue fields sized by their numbers) and River (one loop through every cell). Inspired by Inkwell Games.",
+    status: "live",
+    coverWorld: "collage",
+    tags: ["Logic", "Puzzle", "Daily"],
+    badges: ["Daily", "3 puzzles"],
+  },
   // @new-game:manifest (keep this line: the scaffolder inserts new games above it)
 ];
 
