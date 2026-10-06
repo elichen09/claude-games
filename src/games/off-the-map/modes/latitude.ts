@@ -58,7 +58,7 @@ export const LATITUDE: ModeDef<Spec> = {
         <div class="otm-status"><button class="ghost" id="hint">Hint: first letters (half points)</button><span class="sp"></span><button class="ghost" id="stop">I'm done</button></div></section>`;
     const $ = (id: string) => stage.querySelector<HTMLElement>("#" + id)!;
     const globe = new Globe(230);
-    $("gw").appendChild(globe.pc.canvas);
+    $("gw").appendChild(globe.el);
     globe.center([spec.city.at[0], lat * 0.75]);
 
     const found = new Set<string>(), hinted = new Set<string>(), parallel = { type: "LineString" as const, coordinates: Array.from({ length: 181 }, (_, i) => [-180 + i * 2, lat]) };

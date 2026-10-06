@@ -32,7 +32,7 @@ export const BLITZ: ModeDef<Spec> = {
         <div class="otm-msg" id="msg" aria-live="polite"></div></section>`;
     const $ = (id: string) => stage.querySelector<HTMLElement>("#" + id)!;
     const globe = new Globe(240);
-    $("gw").appendChild(globe.pc.canvas);
+    $("gw").appendChild(globe.el);
     globe.center([env.rnd() * 360 - 180, 15]);
 
     let idx = -1, timeLeft = SECONDS, over = false, combo = 0, score = 0, shownAt = 0, flashBad: Country | null = null, flashUntil = 0, reveal: Country | null = null;

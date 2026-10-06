@@ -143,6 +143,15 @@ export class Globe {
   idleMs = 150;
   /** Paused globes skip onFrame and only re-render the planet when invalidated (stars still twinkle). */
   paused = false;
+  /** Zoom factor: 1 shows the whole planet. Wheel, pinch and the +/− buttons change it. */
+  zoom = 1;
+  readonly maxZoom = 6;
+  /** The canvas plus its zoom buttons: put this on the page (previews can use pc.canvas alone). */
+  el: HTMLDivElement;
+  private baseScale: number;
+  private pointers = new Map<number, { x: number; y: number }>();
+  private pinch: { d: number; z: number } | null = null;
+  private zoomAnim: ReturnType<typeof animate> | null = null;
   private base: PixelCanvas; private basePath: GeoPath;
   private drag: { x: number; y: number; rot: [number, number, number]; moved: boolean } | null = null;
   private listeners: [string, EventListener][] = [];
@@ -155,30 +164,52 @@ export class Globe {
     const w = Math.round(size * pad);
     this.pc = pixelCanvas(w, w, "otm-canvas otm-globe");
     this.base = pixelCanvas(w, w, "", true);
-    this.proj = geoOrthographic().scale(size * 0.47).translate([w / 2, w / 2]).clipAngle(90).precision(1);
+    this.baseScale = size * 0.47;
+    this.proj = geoOrthographic().scale(this.baseScale).translate([w / 2, w / 2]).clipAngle(90).precision(1);
     this.path = geoPath(this.proj, this.pc.ctx);
     this.basePath = geoPath(this.proj, this.base.ctx);
     let seed = 7; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
     this.stars = Array.from({ length: Math.round(w * 0.5) }, () => [Math.floor(rnd() * w), Math.floor(rnd() * w), rnd()]);
     const c = this.pc.canvas;
     c.style.touchAction = "none";
+    this.el = document.createElement("div");
+    this.el.className = "otm-globe-box";
+    this.el.appendChild(c);
+    this.el.insertAdjacentHTML("beforeend", `<div class="otm-zoom"><button type="button" data-z="in" aria-label="Zoom in">+</button><button type="button" data-z="out" aria-label="Zoom out">−</button><button type="button" data-z="reset" aria-label="Zoom out all the way" hidden>⟲</button></div>`);
+    this.el.querySelectorAll<HTMLButtonElement>(".otm-zoom button").forEach((b) => (b.onclick = () => {
+      if (!this.interactive) return;
+      this.zoomTo(b.dataset.z === "in" ? this.zoom * 1.7 : b.dataset.z === "out" ? this.zoom / 1.7 : 1);
+    }));
+    const dist = () => { const [a, b] = [...this.pointers.values()]; return Math.hypot(a.x - b.x, a.y - b.y); };
     this.on("pointerdown", (e) => {
       if (!this.interactive) return;
       const p = e as PointerEvent;
       c.setPointerCapture(p.pointerId);
+      this.pointers.set(p.pointerId, { x: p.clientX, y: p.clientY });
+      if (this.pointers.size === 2) { this.pinch = { d: dist(), z: this.zoom }; this.drag = null; return; } // two fingers: pinch to zoom
       this.drag = { x: p.clientX, y: p.clientY, rot: this.proj.rotate() as [number, number, number], moved: false };
     });
     this.on("pointermove", (e) => {
       const p = e as PointerEvent;
+      if (this.pointers.has(p.pointerId)) this.pointers.set(p.pointerId, { x: p.clientX, y: p.clientY });
+      if (this.pinch && this.pointers.size >= 2) { this.setZoom(this.pinch.z * (dist() / Math.max(1, this.pinch.d))); this.lastDrag = performance.now(); return; }
       if (!this.drag) return;
       const dx = p.clientX - this.drag.x, dy = p.clientY - this.drag.y;
       if (Math.hypot(dx, dy) > 5) this.drag.moved = true;
       if (!this.drag.moved) return;
       this.lastDrag = performance.now();
-      const k = 180 / ((c.getBoundingClientRect().width * 0.94) / this.pad);
+      // the point under your finger should follow it, so drag more slowly when zoomed in
+      const k = 75 / (this.proj.scale() * (c.getBoundingClientRect().width / this.pc.w));
       this.proj.rotate([this.drag.rot[0] + dx * k, Math.max(-85, Math.min(85, this.drag.rot[1] - dy * k)), this.drag.rot[2]]);
     });
+    const release = (e: Event) => {
+      const p = e as PointerEvent;
+      this.pointers.delete(p.pointerId);
+      if (this.pinch) { if (this.pointers.size < 2) { this.pinch = null; this.drag = null; } return true; }
+      return false;
+    };
     this.on("pointerup", (e) => {
+      if (release(e)) return;
       const p = e as PointerEvent, d = this.drag;
       this.drag = null;
       if (!d || d.moved || !this.onTap || !this.interactive) return;
@@ -187,7 +218,15 @@ export class Globe {
       const ll = this.proj.invert!([x, y]);
       if (ll) this.onTap(ll as LonLat);
     });
-    this.on("pointercancel", () => (this.drag = null));
+    this.on("pointercancel", (e) => { release(e); this.drag = null; });
+    const wheel = (e: WheelEvent) => {
+      if (!this.interactive) return;
+      e.preventDefault();
+      this.zoomAnim?.stop(); this.zoomAnim = null;
+      this.setZoom(this.zoom * Math.exp(-e.deltaY * (e.deltaMode ? 0.05 : 0.0018)));
+    };
+    c.addEventListener("wheel", wheel, { passive: false });
+    this.listeners.push(["wheel", wheel as EventListener]);
     const loop = (now: number) => {
       const dt = Math.min(64, now - this.last); this.last = now;
       if (!this.paused) this.onFrame?.(dt, now);
@@ -198,7 +237,21 @@ export class Globe {
   }
   private on(type: string, fn: EventListener) { this.pc.canvas.addEventListener(type, fn); this.listeners.push([type, fn]); }
   destroy() { cancelAnimationFrame(this.raf); for (const [t, f] of this.listeners) this.pc.canvas.removeEventListener(t, f); }
-  get dragging() { return !!this.drag?.moved; }
+  get dragging() { return !!this.drag?.moved || !!this.pinch; }
+  /** Set the zoom immediately, clamped to 1…maxZoom. */
+  setZoom(z: number) {
+    this.zoom = Math.max(1, Math.min(this.maxZoom, z));
+    this.proj.scale(this.baseScale * this.zoom);
+    const reset = this.el.querySelector<HTMLButtonElement>('[data-z="reset"]'); if (reset) reset.hidden = this.zoom < 1.05;
+    this.dirty = true;
+  }
+  /** Ease to a zoom level. */
+  zoomTo(z: number, ms = 260) {
+    this.zoomAnim?.stop();
+    const from = this.zoom, to = Math.max(1, Math.min(this.maxZoom, z)), a = animate(ms, (t) => this.setZoom(from * Math.pow(to / from, ease(t))));
+    this.zoomAnim = a; a.done.then(() => { if (this.zoomAnim === a) this.zoomAnim = null; });
+    return a.done;
+  }
   /** Ask for the planet to be re-rendered on the next frame (after changing fills or underlays). */
   invalidate() { this.dirty = true; }
 
@@ -225,7 +278,7 @@ export class Globe {
     const pal = palette(), { ctx, w, h } = this.pc, r = this.proj.scale(), [cx, cy] = this.proj.translate();
     // The lit planet is cached: re-render it when the view moves (at most ~30 fps unless dragging), when asked,
     // or every 150 ms so the clouds keep drifting (previews use a longer frameMs). Stars, overlays and particles still update every frame.
-    const key = this.proj.rotate().map((v) => v.toFixed(2)).join(","), since = now - this.baseAt;
+    const key = this.proj.rotate().map((v) => v.toFixed(2)).join(",") + "@" + this.proj.scale().toFixed(1), since = now - this.baseAt;
     if (this.dirty || (!this.paused && (since > this.idleMs || (key !== this.baseKey && (since > this.frameMs || this.dragging))))) {
       this.renderBase(pal, now); this.baseKey = key; this.baseAt = now; this.dirty = false;
     }

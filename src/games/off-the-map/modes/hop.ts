@@ -52,7 +52,7 @@ export const HOP: ModeDef<Spec> = {
         <div class="otm-status"><span class="otm-fuel" id="fuel"></span><span class="sp"></span><button class="ghost" id="undo">Undo hop</button><button class="ghost" id="peek">Peek neighbours (−${PEEK_COST})</button><button class="ghost" id="give">Give up</button></div></section>`;
     const $ = (id: string) => stage.querySelector<HTMLElement>("#" + id)!;
     const globe = new Globe(230);
-    $("gw").appendChild(globe.pc.canvas);
+    $("gw").appendChild(globe.el);
     globe.center(geoInterpolate(from.anchor, to.anchor)(0.5) as LonLat);
 
     const chain: Country[] = [from];

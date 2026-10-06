@@ -140,3 +140,10 @@
   .otm-next { grid-template-columns: 1fr; }
   .otm-choices { grid-template-columns: 1fr; }
 }
+
+/* globe zoom */
+.otm-globe-box { position: relative; }
+.otm-zoom { position: absolute; right: 8px; top: 8px; z-index: 2; display: grid; gap: 4px; }
+.otm-zoom button { width: 32px; height: 32px; border: 0; padding: 0; background: var(--panel); color: var(--fg); font-family: var(--display); font-size: 18px; line-height: 1; box-shadow: inset 0 -3px 0 rgba(0,0,0,.3), 0 0 0 1px var(--line); cursor: pointer; }
+.otm-zoom button:hover { background: var(--panel2); }
+.otm-zoom button[hidden] { display: none; }

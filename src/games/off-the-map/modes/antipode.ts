@@ -50,7 +50,7 @@ export const ANTIPODE: ModeDef<Spec> = {
         <div class="otm-verdict" id="verdict" hidden></div></section>`;
     const $ = (id: string) => stage.querySelector<HTMLElement>("#" + id)!;
     const globe = new Globe(230);
-    $("gw").appendChild(globe.pc.canvas);
+    $("gw").appendChild(globe.el);
     globe.center(dig ? anti : city.at);
 
     const markers: Marker[] = dig
@@ -106,6 +106,7 @@ export const ANTIPODE: ModeDef<Spec> = {
     const turn = (dest: LonLat, ms: number) => { const path = geoInterpolate(globe.centerOf(), dest); return run(ms, (t) => globe.center(path(ease(t)) as LonLat)); };
     async function drillReveal(a: LonLat, b: LonLat, focus: LonLat) {
       from = a; to = b; globe.interactive = false;
+      if (globe.zoom > 1) await globe.zoomTo(1, 350); // the cutaway needs the whole planet in view
       const skip = document.createElement("button"); skip.className = "ghost otm-skip"; skip.textContent = "Skip ▸▸";
       skip.onclick = () => { fast = true; anim?.stop(); skip.remove(); };
       $("gw").appendChild(skip);
