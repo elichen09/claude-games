@@ -1,7 +1,7 @@
 /* Off the Map: country shapes, lookups, name matching and small math helpers shared by every mode. */
 import { geoArea, geoBounds, geoCentroid, geoContains, geoDistance } from "d3-geo";
 import type { Feature, FeatureCollection, MultiLineString, MultiPolygon, Polygon } from "geojson";
-import { feature, mesh } from "topojson-client";
+import { feature, mesh, neighbors } from "topojson-client";
 import type { GeometryCollection, Topology } from "topojson-specification";
 import atlasJson from "world-atlas/countries-110m.json";
 import { CITIES } from "./data/cities";
@@ -21,6 +21,10 @@ export interface Country {
   areaKm2: number;
   density: number; // people per km²
   centroid: LonLat;
+  /** Center of the country's largest landmass: where routes and labels should point. */
+  anchor: LonLat;
+  /** The largest single landmass, for silhouettes. */
+  main: Polygon;
   bounds: [LonLat, LonLat];
 }
 
@@ -40,9 +44,12 @@ export const COUNTRIES: Country[] = shapes.map((shape) => {
   const [name, aliases, continent, pop, sovereign] = COUNTRY_DATA[key] ?? [key, "", "Asia", 1, false];
   const areaKm2 = geoArea(shape) * 6371 * 6371;
   const keys = [...new Set([key, name, ...aliases.split("/")].filter(Boolean).map(squash))];
-  return { key, name, keys, continent, pop, sovereign, shape, areaKm2, density: (pop * 1e6) / areaKm2, centroid: geoCentroid(shape) as LonLat, bounds: geoBounds(shape) as [LonLat, LonLat] };
+  const g = shape.geometry, main: Polygon = g.type === "Polygon" ? g : { type: "Polygon", coordinates: g.coordinates.reduce((a, b) => (geoArea({ type: "Polygon", coordinates: b }) > geoArea({ type: "Polygon", coordinates: a }) ? b : a)) };
+  return { key, name, keys, continent, pop, sovereign, shape, areaKm2, density: (pop * 1e6) / areaKm2, centroid: geoCentroid(shape) as LonLat, anchor: geoCentroid(main) as LonLat, main, bounds: geoBounds(shape) as [LonLat, LonLat] };
 });
 export const byKey = new Map(COUNTRIES.map((c) => [c.key, c]));
+/** Land neighbours, from shared borders in the map topology (so France borders Brazil via French Guiana). */
+export const NEIGHBORS = new Map<Country, Country[]>(neighbors(atlas.objects.countries.geometries).map((ns, i) => [COUNTRIES[i], ns.map((j) => COUNTRIES[j])]));
 export const LAND: FeatureCollection = { type: "FeatureCollection", features: COUNTRIES.map((c) => c.shape) };
 export const countryNames = () => COUNTRIES.filter((c) => c.sovereign).map((c) => c.name).sort();
 
@@ -156,4 +163,45 @@ export function nearestCity(p: LonLat, except?: CityInfo): { city: CityInfo; km:
   let best = CITY_LIST[0], bd = Infinity;
   for (const c of CITY_LIST) { if (c === except) continue; const d = distanceKm(p, c.at); if (d < bd) { bd = d; best = c; } }
   return { city: best, km: bd };
+}
+
+/* ── distances between countries ── */
+const vertices = new Map<Country, LonLat[]>();
+function outline(c: Country): LonLat[] {
+  let v = vertices.get(c);
+  if (!v) {
+    const polys = c.shape.geometry.type === "Polygon" ? [c.shape.geometry.coordinates] : c.shape.geometry.coordinates;
+    v = polys.flatMap((p) => p[0] as LonLat[]);
+    vertices.set(c, v);
+  }
+  return v;
+}
+/** Closest distance between two countries' borders, in km (0 for neighbours). */
+export function borderKm(a: Country, b: Country): number {
+  if (a === b || NEIGHBORS.get(a)?.includes(b)) return 0;
+  let best = Infinity;
+  const va = outline(a), vb = outline(b);
+  for (const p of va) for (const q of vb) { const d = geoDistance(p, q); if (d < best) best = d; }
+  return best * KM_PER_RAD;
+}
+/** Compass bearing from one point to another, in degrees clockwise from north. */
+export function bearing([lon1, lat1]: LonLat, [lon2, lat2]: LonLat) {
+  const r = Math.PI / 180, y = Math.sin((lon2 - lon1) * r) * Math.cos(lat2 * r);
+  const x = Math.cos(lat1 * r) * Math.sin(lat2 * r) - Math.sin(lat1 * r) * Math.cos(lat2 * r) * Math.cos((lon2 - lon1) * r);
+  return (Math.atan2(y, x) / r + 360) % 360;
+}
+export const ARROWS = ["↑", "↗", "→", "↘", "↓", "↙", "←", "↖"];
+export const arrowFor = (deg: number) => ARROWS[Math.round(deg / 45) % 8];
+
+/** The country under a tap, or the nearest one within `km` if the tap landed just offshore. */
+export function countryNear(p: LonLat, km = 160): Country | null {
+  const hit = countryAt(p);
+  if (hit) return hit;
+  let best: Country | null = null, bd = km / KM_PER_RAD;
+  for (const c of COUNTRIES) {
+    const [[x0, y0], [x1, y1]] = c.bounds;
+    if (p[1] < y0 - 3 || p[1] > y1 + 3) continue;
+    for (const q of outline(c)) { const d = geoDistance(p, q); if (d < bd) { bd = d; best = c; } }
+  }
+  return best;
 }

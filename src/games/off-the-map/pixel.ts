@@ -2,7 +2,7 @@
  * Pixel rendering for Off the Map: low-resolution canvases scaled up with hard edges (to match the arcade's
  * pixel worlds), colors taken from the active world's CSS tokens, and a lit, cloudy, draggable pixel globe.
  */
-import { geoGraticule10, geoOrthographic, geoPath, type GeoPath, type GeoPermissibleObjects, type GeoProjection } from "d3-geo";
+import { geoGraticule10, geoInterpolate, geoOrthographic, geoPath, type GeoPath, type GeoPermissibleObjects, type GeoProjection } from "d3-geo";
 import { BORDERS, COUNTRIES, type Country, type LonLat } from "./geo";
 
 export interface Palette { bg: string; panel: string; panel2: string; fg: string; muted: string; line: string; accent: string; accent2: string; good: string; bad: string; t: string[]; ocean: string; land: string; light: boolean }
@@ -139,6 +139,10 @@ export class Globe {
   lastDrag = 0;
   /** Minimum milliseconds between re-renders of the lit planet while it's moving (dragging always renders). */
   frameMs = 30;
+  /** How often the clouds advance when nothing else changes. */
+  idleMs = 150;
+  /** Paused globes skip onFrame and only re-render the planet when invalidated (stars still twinkle). */
+  paused = false;
   private base: PixelCanvas; private basePath: GeoPath;
   private drag: { x: number; y: number; rot: [number, number, number]; moved: boolean } | null = null;
   private listeners: [string, EventListener][] = [];
@@ -186,7 +190,7 @@ export class Globe {
     this.on("pointercancel", () => (this.drag = null));
     const loop = (now: number) => {
       const dt = Math.min(64, now - this.last); this.last = now;
-      this.onFrame?.(dt, now);
+      if (!this.paused) this.onFrame?.(dt, now);
       this.draw(now, dt);
       this.raf = requestAnimationFrame(loop);
     };
@@ -201,6 +205,15 @@ export class Globe {
   /** Point the globe's center at a lon/lat. */
   center(p: LonLat, tilt = 0) { this.proj.rotate([-p[0], -p[1], tilt]); }
   centerOf(): LonLat { const r = this.proj.rotate(); return [-r[0], -r[1]]; }
+  private turning: ReturnType<typeof animate> | null = null;
+  /** Spin smoothly so a lon/lat faces the viewer. A new turn replaces one in progress. */
+  turnTo(p: LonLat, ms = 700) {
+    this.turning?.stop();
+    const path = geoInterpolate(this.centerOf(), p), t = animate(ms, (k) => this.center(path(ease(k)) as LonLat));
+    this.turning = t; t.done.then(() => { if (this.turning === t) this.turning = null; });
+    return t.done;
+  }
+  get isTurning() { return !!this.turning; }
   /** Whether a lon/lat is on the visible hemisphere. */
   visible(p: LonLat) { const c = this.centerOf(), toR = Math.PI / 180; return Math.sin(c[1] * toR) * Math.sin(p[1] * toR) + Math.cos(c[1] * toR) * Math.cos(p[1] * toR) * Math.cos((p[0] - c[0]) * toR) > 0.02; }
   /** A burst of pixel particles at a canvas position. */
@@ -213,7 +226,7 @@ export class Globe {
     // The lit planet is cached: re-render it when the view moves (at most ~30 fps unless dragging), when asked,
     // or every 150 ms so the clouds keep drifting (previews use a longer frameMs). Stars, overlays and particles still update every frame.
     const key = this.proj.rotate().map((v) => v.toFixed(2)).join(","), since = now - this.baseAt;
-    if (this.dirty || since > 150 || (key !== this.baseKey && (since > this.frameMs || this.dragging))) {
+    if (this.dirty || (!this.paused && (since > this.idleMs || (key !== this.baseKey && (since > this.frameMs || this.dragging))))) {
       this.renderBase(pal, now); this.baseKey = key; this.baseAt = now; this.dirty = false;
     }
     this.compose(pal, now, dt, ctx, w, h, r, cx, cy);

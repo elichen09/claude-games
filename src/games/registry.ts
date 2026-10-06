@@ -19,13 +19,13 @@ export const GAMES: GameManifest[] = [
   {
     slug: "off-the-map",
     title: "Off the Map",
-    tagline: "Geography, but strange. Dig straight through the planet and race a line of latitude around it.",
+    tagline: "Geography, but strange. Hunt hidden countries, catch maps lying about size, dig through the core.",
     description:
-      "Two visual geography games on a lit pixel globe: find where you would pop out if you dug through the Earth, and name every country on a city's line of latitude against the clock.",
+      "Six geography games on a lit pixel globe: hot-and-cold country hunts, true-size showdowns, speed pinning, border hopping, digging to the antipode and racing a line of latitude.",
     status: "live",
     coverWorld: "orbit",
     tags: ["Geography", "Maps", "Puzzle"],
-    badges: ["Daily", "2 modes"],
+    badges: ["Daily", "6 modes"],
   },
   // @new-game:manifest (keep this line: the scaffolder inserts new games above it)
 ];
