@@ -1,6 +1,6 @@
 /* Off the Map: the round runner (HUD → rounds → results) and the country-guess input shared by the modes. */
 import type { GameContext } from "@/lib/games/types";
-import { countryNames, hashStr, matchCountry, seeded, today, type Country } from "./geo";
+import { COUNTRIES, hashStr, matchCountry, norm, seeded, today, type Country } from "./geo";
 
 export interface RoundResult { points: number; label: string }
 export interface RoundEnv {
@@ -92,21 +92,69 @@ export function runMode<S>(root: HTMLElement, ctx: GameContext, mode: ModeDef<S>
 }
 
 let listId = 0;
-/** A country guess box with autocomplete. onGuess gets the matched country (or null) and the raw text. */
+/** Countries whose name (or a nickname) starts with what's been typed: name starts first, then word starts. */
+function suggest(q: string, limit = 6): Country[] {
+  const n = norm(q), k = n.replace(/ /g, "");
+  if (!k) return [];
+  const scored: [number, Country][] = [];
+  for (const c of COUNTRIES) {
+    if (c.key === "Antarctica") continue;
+    const name = norm(c.name);
+    const score = name.replace(/ /g, "").startsWith(k) ? 0 : name.split(" ").some((w) => w.startsWith(n)) ? 1 : c.keys.some((ck) => ck.startsWith(k)) ? 2 : -1;
+    if (score >= 0) scored.push([score, c]);
+  }
+  return scored.sort((a, b) => a[0] - b[0] || a[1].name.localeCompare(b[1].name)).slice(0, limit).map(([, c]) => c);
+}
+
+/**
+ * A country guess box with its own suggestion list (the browser's datalist matches letters anywhere and doesn't
+ * submit on pick). Arrow keys move, Enter or a tap guesses the highlighted country, Esc closes the list.
+ * onGuess gets the matched country (or null) and the raw text.
+ */
 export function guessBox(onGuess: (c: Country | null, raw: string) => void, placeholder = "Type a country…") {
-  const id = `otm-countries-${++listId}`;
+  const id = `otm-suggest-${++listId}`;
   const el = document.createElement("form");
   el.className = "otm-guess"; el.autocomplete = "off";
-  el.innerHTML = `<input class="field" list="${id}" maxlength="60" placeholder="${esc(placeholder)}" aria-label="Your guess" spellcheck="false" autocapitalize="words">
+  el.innerHTML = `<div class="otm-ac"><input class="field" maxlength="60" placeholder="${esc(placeholder)}" aria-label="Your guess" spellcheck="false" autocapitalize="words" autocomplete="off"
+      role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="${id}"><ul class="otm-suggest" id="${id}" role="listbox" hidden></ul></div>
     <button class="go" type="submit">Go</button>
-    <datalist id="${id}">${countryNames().map((n) => `<option value="${esc(n)}"></option>`).join("")}</datalist>
     <div class="otm-msg" aria-live="polite"></div>`;
-  const input = el.querySelector("input")!, msg = el.querySelector<HTMLElement>(".otm-msg")!;
-  el.onsubmit = (e) => { e.preventDefault(); const v = input.value.trim(); if (!v) return; onGuess(matchCountry(v), v); input.value = ""; };
+  const input = el.querySelector("input")!, list = el.querySelector<HTMLUListElement>(".otm-suggest")!, msg = el.querySelector<HTMLElement>(".otm-msg")!;
+  let items: Country[] = [], active = -1;
+
+  const close = () => { list.hidden = true; items = []; active = -1; input.setAttribute("aria-expanded", "false"); input.removeAttribute("aria-activedescendant"); };
+  function render() {
+    items = suggest(input.value);
+    if (!items.length) return close();
+    const typed = norm(input.value);
+    list.innerHTML = items.map((c, i) => {
+      // bold the part that matched when the name starts with what was typed
+      const lead = norm(c.name).startsWith(typed) ? c.name.slice(0, input.value.trim().length) : "";
+      return `<li role="option" id="${id}-${i}" data-i="${i}" aria-selected="${i === active}" class="${i === active ? "on" : ""}">${lead ? `<b>${esc(lead)}</b>${esc(c.name.slice(lead.length))}` : esc(c.name)}</li>`;
+    }).join("");
+    list.hidden = false; input.setAttribute("aria-expanded", "true");
+    if (active >= 0) input.setAttribute("aria-activedescendant", `${id}-${active}`); else input.removeAttribute("aria-activedescendant");
+  }
+  function choose(c: Country) { close(); input.value = ""; onGuess(c, c.name); input.focus({ preventScroll: true }); }
+
+  input.addEventListener("input", () => { active = -1; render(); });
+  input.addEventListener("keydown", (e) => {
+    if (list.hidden || !items.length) return;
+    if (e.key === "ArrowDown") { e.preventDefault(); active = active >= items.length - 1 ? -1 : active + 1; render(); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); active = active < 0 ? items.length - 1 : active - 1; render(); }
+    else if (e.key === "Enter" && active >= 0) { e.preventDefault(); choose(items[active]); }
+    else if (e.key === "Tab" && active >= 0) { e.preventDefault(); input.value = items[active].name; active = -1; render(); }
+    else if (e.key === "Escape") { e.preventDefault(); close(); }
+  });
+  // pointerdown (not click) so the input doesn't lose focus first
+  list.addEventListener("pointerdown", (e) => { const li = (e.target as HTMLElement).closest("li"); if (!li) return; e.preventDefault(); choose(items[+li.dataset.i!]); });
+  input.addEventListener("blur", () => setTimeout(close, 120));
+  el.onsubmit = (e) => { e.preventDefault(); const v = input.value.trim(); close(); if (!v) return; onGuess(matchCountry(v), v); input.value = ""; };
+
   return {
     el, input,
     say(html: string, kind: "" | "good" | "bad" = "") { msg.innerHTML = html; msg.className = "otm-msg " + kind; },
-    lock() { input.disabled = true; el.querySelector("button")!.disabled = true; },
+    lock() { close(); input.disabled = true; el.querySelector("button")!.disabled = true; },
     shake() { el.classList.remove("shake"); void el.offsetWidth; el.classList.add("shake"); },
   };
 }

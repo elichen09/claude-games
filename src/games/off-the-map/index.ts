@@ -1,56 +1,41 @@
 /*
- * Off the Map: geography games built around a lit pixel globe.
- *   Seeker · True Size · Pin Blitz · Border Hop · Antipode · Same Latitude
+ * Off the Map: geography games built around true scale and a lit pixel globe.
+ *   Size Up · Antipode · Same Latitude
  * The menu lives here; each mode is a ModeDef in ./modes, run by runMode() in ./ui.ts.
  */
 import type { GameModule } from "@/lib/games/types";
-import { byKey, today, type LonLat } from "./geo";
+import { today, type LonLat } from "./geo";
 import { ANTIPODE } from "./modes/antipode";
-import { BLITZ } from "./modes/blitz";
-import { HOP } from "./modes/hop";
 import { LATITUDE } from "./modes/latitude";
-import { heat, SEEKER } from "./modes/seeker";
-import { TRUESIZE } from "./modes/truesize";
+import { SIZEUP, sizeUpPreview } from "./modes/sizeup";
 import { Globe } from "./pixel";
 import { esc, pts, runMode, type ModeDef } from "./ui";
 import "./style.css";
 
-const MODES = [SEEKER, TRUESIZE, BLITZ, HOP, ANTIPODE, LATITUDE] as ModeDef[];
+const MODES = [SIZEUP, ANTIPODE, LATITUDE] as ModeDef[];
 
-/** A small spinning globe dressed up for each mode's card. */
-function preview(id: string): Globe {
+/** Card art: a small globe for the globe modes (spins while its card is hovered), a drawing for Size Up. */
+function preview(id: string): { el: HTMLElement; globe?: Globe } {
+  if (id === "sizeup") return { el: sizeUpPreview() };
   const g = new Globe(112, 1.1);
-  g.interactive = false; g.frameMs = 40; g.paused = true; // spins only while its card is hovered
-  const start: Record<string, LonLat> = { seeker: [10, 30], truesize: [-10, 25], blitz: [-60, -10], hop: [5, 45], antipode: [100, 15], latitude: [-30, 30] };
-  let [lon, lat] = start[id] || [0, 20], t = 0;
+  g.interactive = false; g.frameMs = 40; g.paused = true;
+  let [lon, lat]: LonLat = id === "antipode" ? [100, 15] : [-30, 30], t = 0;
   g.onFrame = (dt) => { lon += dt * 0.008; t += dt / 1000; g.center([lon, lat]); };
-  const k = (name: string) => byKey.get(name)!;
-  const hot: [string, number][] = [["France", 0], ["Germany", 300], ["Spain", 900], ["Poland", 1500], ["Italy", 700], ["Ukraine", 2600], ["Algeria", 4000], ["Russia", 3000], ["United Kingdom", 1100]];
-  const hop = ["Spain", "France", "Germany", "Poland", "Belarus"].map((n) => k(n).anchor);
   g.style = {
-    fill: id === "seeker" ? (c) => { const h = hot.find(([n]) => n === c.key); return h ? heat(h[1]) : null; }
-      : id === "truesize" ? (c, p) => (c.key === "Greenland" ? p.t[4] : c.key === "Dem. Rep. Congo" ? p.accent : null)
-      : id === "blitz" ? (c, p) => (["Brazil", "Peru", "Chile", "Argentina"].includes(c.key) ? p.accent : null)
-      : id === "hop" ? (c, p) => (["Spain", "France", "Germany", "Poland", "Belarus"].includes(c.key) ? p.accent : null) : undefined,
     underlay: id === "latitude"
       ? (c, path, _p, pal) => { c.beginPath(); path({ type: "LineString", coordinates: Array.from({ length: 91 }, (_, i) => [-180 + i * 4, 38]) }); c.strokeStyle = pal.accent2; c.lineWidth = 4; c.stroke(); }
       : undefined,
-    overlay(c, path, proj, pal) {
-      const [x, y] = proj.translate(), r = proj.scale(), pulse = (Math.sin(t * 3) + 1) / 2;
-      if (id === "antipode") {
-        c.strokeStyle = pal.accent; c.lineWidth = 2; c.globalAlpha = 0.6 + 0.4 * pulse;
-        c.beginPath(); c.moveTo(x - r * 0.75, y - r * 0.55); c.lineTo(x + r * 0.75, y + r * 0.55); c.stroke(); c.globalAlpha = 1;
-        c.fillStyle = "#ffd66b"; c.fillRect(Math.round(x) - 3, Math.round(y) - 3, 6, 6);
-      }
-      if (id === "hop") { c.beginPath(); path({ type: "LineString", coordinates: hop }); c.strokeStyle = "#ffffff"; c.setLineDash([3, 2]); c.lineWidth = 2; c.stroke(); c.setLineDash([]); }
-      if (id === "blitz") {
-        const s = 6 + pulse * 3; c.fillStyle = "#ffffff";
-        c.fillRect(Math.round(x - s - 4), Math.round(y), 5, 2); c.fillRect(Math.round(x + s), Math.round(y), 5, 2);
-        c.fillRect(Math.round(x), Math.round(y - s - 4), 2, 5); c.fillRect(Math.round(x), Math.round(y + s), 2, 5);
-      }
-    },
+    overlay: id === "antipode"
+      ? (c, _path, proj, pal) => {
+          const [x, y] = proj.translate(), r = proj.scale(), pulse = (Math.sin(t * 3) + 1) / 2;
+          c.strokeStyle = pal.accent; c.lineWidth = 2; c.globalAlpha = 0.6 + 0.4 * pulse;
+          c.beginPath(); c.moveTo(x - r * 0.75, y - r * 0.55); c.lineTo(x + r * 0.75, y + r * 0.55); c.stroke(); c.globalAlpha = 1;
+          c.fillStyle = "#ffd66b"; c.fillRect(Math.round(x) - 3, Math.round(y) - 3, 6, 6);
+        }
+      : undefined,
   };
-  return g;
+  g.onFrame(0, 0);
+  return { el: g.pc.canvas, globe: g };
 }
 
 const game: GameModule = {
@@ -66,7 +51,7 @@ const game: GameModule = {
       root.innerHTML = `
         <section class="panel otm-hero"><span class="eyebrow">Geography, but strange · ${date}</span>
           <h1 class="display">Off the <em>Map</em></h1>
-          <p>Six ways to play with the planet: hunt a hidden country by hot and cold, catch maps lying about size, pin countries against the clock, hop borders, dig through the core and race a line of latitude. New puzzles every day.</p></section>
+          <p>Maps lie about size, nobody knows what's on the other side of the planet, and lines of latitude go to strange places. Three games about the world as it really is. New puzzles every day.</p></section>
         <div class="otm-modes">${MODES.map((m) => {
           const d = ctx.storage.get<{ total: number } | null>(`daily:${m.id}:${date}`, null);
           return `<article class="panel otm-mode" data-mode="${m.id}"><div class="otm-prev"></div>
@@ -77,11 +62,10 @@ const game: GameModule = {
         <footer class="footer"><span>Maps: Natural Earth.</span><span>Daily puzzles are the same for everyone.</span></footer>`;
       const globes: Globe[] = [];
       root.querySelectorAll<HTMLElement>(".otm-mode").forEach((card) => {
-        const m = MODES.find((x) => x.id === card.dataset.mode)!, g = preview(m.id);
-        globes.push(g); card.querySelector(".otm-prev")!.appendChild(g.pc.canvas);
-        g.onFrame?.(0, 0); // set the starting view
-        card.addEventListener("pointerenter", () => (g.paused = false));
-        card.addEventListener("pointerleave", () => (g.paused = true));
+        const m = MODES.find((x) => x.id === card.dataset.mode)!, p = preview(m.id);
+        card.querySelector(".otm-prev")!.appendChild(p.el);
+        const g = p.globe;
+        if (g) { globes.push(g); card.addEventListener("pointerenter", () => (g.paused = false)); card.addEventListener("pointerleave", () => (g.paused = true)); }
         card.querySelectorAll<HTMLButtonElement>("[data-play]").forEach((b) => (b.onclick = () => { ctx.sound.unlock(); ctx.sound.click(); play(m, b.dataset.play === "daily"); }));
       });
       stop = () => globes.forEach((g) => g.destroy());
