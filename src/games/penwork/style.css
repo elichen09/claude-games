@@ -28,6 +28,7 @@
 .pw-play { gap: 12px; }
 .pw-rules summary { cursor: pointer; font-family: var(--label); font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--accent2); }
 .pw-rules p { margin: 6px 0 0; color: var(--fg); }
+.pw-rules ul { margin: 6px 0 0; padding-left: 20px; color: var(--fg); }
 .pw-rules .pw-g { color: var(--pw-green); } .pw-rules .pw-u { color: var(--pw-blue); }
 .pw-board-host { display: grid; place-items: center; }
 .pw-tools { display: flex; gap: 8px; align-items: center; }
@@ -65,22 +66,33 @@
 .pw-fields .pw-cell.bad { box-shadow: inset 0 0 0 3px #d6293e; }
 .pw-fields.won .pw-cell { animation: pop .45s steps(4); }
 
-/* River */
-.pw-river { width: min(100%, 520px); display: grid; gap: 6px; }
-.pw-river svg { width: 100%; height: auto; touch-action: none; user-select: none; display: block; box-shadow: 4px 4px 0 rgba(0,0,0,.35); cursor: crosshair; }
-.pw-river-bg { fill: var(--paper); }
-.pw-river-grid { stroke: rgba(29,26,46,.12); stroke-width: .3; }
-.pw-edge { stroke: transparent; stroke-width: 3.2; stroke-linecap: round; }
-.pw-edge.on { stroke: var(--pw-blue); }
-.pw-edge.clue { stroke: var(--ink); stroke-width: 3.6; }
-@keyframes pw-edge-wrong { 0%, 100% { stroke: var(--pw-blue); } 25%, 75% { stroke: #d6293e; } }
-.pw-edge.wrong { animation: pw-edge-wrong 1.2s steps(6); }
-.pw-dot { fill: rgba(29,26,46,.45); }
-.pw-dot.full { fill: var(--ink); }
-.pw-dot.bad { fill: #d6293e; r: 2.2px; }
-.pw-flow { fill: none; stroke: #bfe6ff; stroke-width: 1.2; stroke-dasharray: 3 4; stroke-linecap: round; opacity: 0; }
-.pw-river.won .pw-flow { opacity: 1; animation: pw-flow 1.2s linear infinite; }
-.pw-river.won .pw-edge.on, .pw-river.won .pw-edge.clue { stroke: #3b82c4; }
+/* River: meadow tiles, water channels with darker banks; given stretches run deeper blue */
+.pw-river { width: min(100%, 560px); display: grid; gap: 6px; }
+.pw-river svg { width: 100%; height: auto; touch-action: none; user-select: none; -webkit-user-select: none; display: block; box-shadow: 4px 4px 0 rgba(0,0,0,.35); cursor: pointer; }
+.pw-river-frame { fill: var(--ink); }
+.pw-tile { fill: #e2ead0; transition: fill .15s; }
+.pw-tile.alt { fill: #d8e2c2; }
+.pw-tile.bad { fill: #f0b3ae; }
+.pw-bank, .pw-wet, .pw-ripple { stroke-linecap: round; fill: none; }
+.pw-bank:not(.on), .pw-wet:not(.on), .pw-ripple:not(.on), .pw-cross:not(.on) { display: none; }
+.pw-bank { stroke: #275a88; stroke-width: 5.6; }
+.pw-bank.given { stroke: #172f4d; }
+.pw-wet { stroke: #6bb4e8; stroke-width: 3.8; }
+.pw-wet.given { stroke: #2f6fae; }
+.pw-ripple { stroke: rgba(230, 246, 255, .75); stroke-width: .55; stroke-dasharray: 1.2 2.8; }
+.pw-cross { stroke: rgba(29,26,46,.6); stroke-width: .55; stroke-linecap: round; fill: none; }
+@keyframes pw-edge-wrong { 0%, 100% { stroke: #275a88; } 25%, 75% { stroke: #e23a4e; } }
+@keyframes pw-cross-wrong { 0%, 100% { stroke: rgba(29,26,46,.6); } 25%, 75% { stroke: #e23a4e; } }
+@keyframes pw-edge-hint { 0%, 100% { stroke: #275a88; } 25%, 75% { stroke: #f5c542; } }
+@keyframes pw-cross-hint { 0%, 100% { stroke: rgba(29,26,46,.6); } 25%, 75% { stroke: #c98a00; } }
+.pw-bank.wrong { animation: pw-edge-wrong 1.2s steps(6); }
+.pw-cross.wrong { animation: pw-cross-wrong 1.2s steps(6); stroke-width: .9; }
+.pw-bank.hinted { animation: pw-edge-hint 1.6s steps(8); }
+.pw-cross.hinted { animation: pw-cross-hint 1.6s steps(8); stroke-width: .9; }
+.pw-flow { fill: none; stroke: #ffffff; stroke-width: .9; stroke-dasharray: 2 5; stroke-linecap: round; opacity: 0; }
+.pw-river.won .pw-flow { opacity: .85; animation: pw-flow 1s linear infinite; }
+.pw-river.won .pw-ripple { display: none; }
+.pw-river.won .pw-wet.given { stroke: #6bb4e8; } .pw-river.won .pw-bank.given { stroke: #275a88; }
 @keyframes pw-flow { to { stroke-dashoffset: -14; } }
 .pw-loops { margin: 0; min-height: 1.2em; color: var(--bad); font-size: .9em; }
 

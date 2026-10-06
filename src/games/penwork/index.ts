@@ -30,8 +30,8 @@ const INFO: Info[] = [
   {
     kind: "river", name: "River", tagline: "One loop through every cell", icon: "🌊",
     size: (l) => `${LEVELS.river[l]}×${LEVELS.river[l]}`,
-    rules: () => `<p>Draw a single river that flows through <b>every cell exactly once</b> and joins back up with itself.</p><p>The dark stretches are given. The river never branches or crosses.</p><p><b>Drag</b> through cells to draw; drag back over a stretch to erase it. <b>Tap</b> between two dots to toggle a single stretch.</p>`,
-    art: `<svg viewBox="0 0 50 50"><rect width="50" height="50" fill="#eaf4fb"/><path d="M8 8H42V24H24V42H8Z" fill="none" stroke="#3b82c4" stroke-width="4" stroke-linejoin="round"/><path d="M8 8H24" stroke="#1d1a2e" stroke-width="5"/><g fill="#1d1a2e"><circle cx="8" cy="8" r="2"/><circle cx="24" cy="8" r="2"/><circle cx="42" cy="8" r="2"/><circle cx="42" cy="24" r="2"/><circle cx="24" cy="24" r="2"/><circle cx="24" cy="42" r="2"/><circle cx="8" cy="42" r="2"/><circle cx="8" cy="24" r="2"/></g></svg>`,
+    rules: () => `<p>Draw one river that flows through <b>every cell exactly once</b> and joins back up with itself. It never branches, crosses or forms a second loop.</p><p>The deep blue stretches are given. Every puzzle can be finished by logic alone. Start with these:</p><ul><li>Every cell has exactly <b>two</b> stretches, so corners always turn.</li><li>A cell with only two open sides uses both.</li><li>A cell that already has two stretches takes no more: mark its other sides ✕.</li><li>Never close a loop until it covers every cell.</li></ul><p><b>Drag</b> through cells to draw, and drag back over a stretch to erase it. <b>Tap</b> the side between two cells to cycle river → ✕ → empty. <b>Right-click</b> a side to mark ✕. Stuck? <b>Hint</b> makes the next move and says why.</p>`,
+    art: `<svg viewBox="0 0 50 50"><rect width="50" height="50" fill="#1d1a2e"/><g fill="#e2ead0"><rect x="1" y="1" width="15.4" height="15.4" rx="1.5"/><rect x="17.3" y="1" width="15.4" height="15.4" rx="1.5"/><rect x="33.6" y="1" width="15.4" height="15.4" rx="1.5"/><rect x="1" y="17.3" width="15.4" height="15.4" rx="1.5"/><rect x="17.3" y="17.3" width="15.4" height="15.4" rx="1.5"/><rect x="33.6" y="17.3" width="15.4" height="15.4" rx="1.5"/><rect x="1" y="33.6" width="15.4" height="15.4" rx="1.5"/><rect x="17.3" y="33.6" width="15.4" height="15.4" rx="1.5"/><rect x="33.6" y="33.6" width="15.4" height="15.4" rx="1.5"/></g><path d="M8.7 8.7H41.3V25H25V41.3H8.7Z" fill="none" stroke="#275a88" stroke-width="8.5" stroke-linejoin="round" stroke-linecap="round"/><path d="M8.7 8.7H41.3V25H25V41.3H8.7Z" fill="none" stroke="#6bb4e8" stroke-width="5.5" stroke-linejoin="round"/><path d="M8.7 8.7H25" stroke="#2f6fae" stroke-width="5.5" stroke-linecap="round"/></svg>`,
   },
 ];
 
@@ -75,7 +75,7 @@ const game: GameModule = {
       const seed = daily ? hashStr(`penwork:${g.kind}:${date}`) : (Math.random() * 2 ** 31) >>> 0;
       let cancelled = false;
       stop = () => { cancelled = true; };
-      const puzzle: Puzzle = await puzzleFor(ctx, g.kind, level, seed, daily ? `puzzle:${g.kind}:${date}` : undefined);
+      const puzzle: Puzzle = await puzzleFor(ctx, g.kind, level, seed, daily ? `puzzle:v2:${g.kind}:${date}` : undefined);
       if (cancelled) return;
       const label = daily ? DAYS[level] : `Practice · ${PRACTICE.find((p) => p.level === level)?.name ?? "Custom"}`;
       stop = runFrame(root, ctx, { title: g.name, label, rules: g.rules(level), shareIcon: g.icon, recordKey: `best:${g.kind}:${level}`, dailyKey: daily ? `daily:${g.kind}:${date}` : undefined },

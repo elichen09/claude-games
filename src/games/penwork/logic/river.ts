@@ -1,10 +1,11 @@
 /*
  * River: draw one closed loop that passes through every cell exactly once (a Hamiltonian cycle on the grid).
  * Some stretches of the river are drawn in as clues. The generator builds a random loop (spanning tree of 2×2
- * blocks, then random flips that keep it a single loop) and adds clue edges until the solver finds just one loop.
+ * blocks, then random flips that keep it a single loop) and adds clue stretches until the same rules a person
+ * uses (two stretches per cell, no early loops) pin down the whole river, so it never needs guessing.
  * Edges are numbered: horizontal h(r,c) = r*(n-1)+c joins (r,c)-(r,c+1); vertical v(r,c) = H + r*n+c joins (r,c)-(r+1,c).
  */
-import type { Rnd } from "./stars";
+import { shuffle, type Rnd } from "./stars";
 
 export interface RiverPuzzle { n: number; clues: number[]; solution: number[] }
 
@@ -36,7 +37,6 @@ export function isSingleLoop(n: number, edges: Set<number>) {
   return steps === n * n;
 }
 
-const shuffle = <T>(a: T[], rnd: Rnd) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 
 /** A random loop through every cell of an even-sized grid. */
 function randomLoop(n: number, rnd: Rnd): Set<number> {
@@ -69,58 +69,124 @@ function randomLoop(n: number, rnd: Rnd): Set<number> {
   return edges;
 }
 
-/** Up to `limit` loops that use every clue edge. Cells are decided in reading order; gives up after nodeLimit. */
-export function solveRiver(n: number, clues: Set<number>, limit = 2, nodeLimit = 200000) {
-  const deg = new Array(n * n).fill(0), end = new Array(n * n).fill(-1), on = new Set<number>(), found: number[][] = [];
-  let nodes = 0;
-  for (let i = 0; i < n * n; i++) end[i] = i;
-  // add an edge a-b, joining path ends; returns an undo function or null if it would close a loop too early
-  const add = (a: number, b: number, e: number, last: boolean) => {
-    if (deg[a] >= 2 || deg[b] >= 2) return null;
-    const ea = end[a], eb = end[b];
-    if (ea === b && !last) return null; // would close a loop that doesn't cover every cell
-    deg[a]++; deg[b]++; on.add(e);
-    const saved = [end[a], end[b], end[ea], end[eb]];
-    end[ea] = eb; end[eb] = ea;
-    return () => { end[ea] = saved[2]; end[eb] = saved[3]; end[a] = saved[0]; end[b] = saved[1]; deg[a]--; deg[b]--; on.delete(e); };
-  };
-  const go = (i: number): void => {
-    if (found.length >= limit || nodes > nodeLimit) return;
-    if (i === n * n) { if (on.size === n * n) found.push([...on]); return; }
-    const r = Math.floor(i / n), c = i % n, need = 2 - deg[i];
-    const right = c < n - 1 ? i + 1 : -1, down = r < n - 1 ? i + n : -1;
-    const eR = right >= 0 ? hEdge(n, r, c) : -1, eD = down >= 0 ? vEdge(n, r, c) : -1;
-    const options: [boolean, boolean][] = need === 0 ? [[false, false]] : need === 1 ? [[true, false], [false, true]] : need === 2 ? [[true, true]] : [];
-    for (const [useR, useD] of options) {
-      nodes++;
-      if ((useR && right < 0) || (useD && down < 0)) continue;
-      if ((eR >= 0 && clues.has(eR) && !useR) || (eD >= 0 && clues.has(eD) && !useD)) continue;
-      const undo: (() => void)[] = [];
-      let ok = true;
-      if (useR) { const u = add(i, right, eR, on.size === n * n - 1); if (u) undo.push(u); else ok = false; }
-      if (ok && useD) { const u = add(i, down, eD, on.size === n * n - 1); if (u) undo.push(u); else ok = false; }
-      if (ok) go(i + 1);
-      undo.reverse().forEach((u) => u());
-      if (found.length >= limit || nodes > nodeLimit) return;
-    }
-  };
-  go(0);
-  return { solutions: found, aborted: nodes > nodeLimit };
+
+/** Stretch states while solving: 1 river, -1 no river, 0 not known yet. */
+export type Marks = number[];
+
+/** The stretches touching each cell. */
+export function cellEdges(n: number) {
+  const out: number[][] = Array.from({ length: n * n }, () => []);
+  for (let e = 0; e < edgeCount(n); e++) { const [a, b] = edgeCells(n, e); out[a].push(e); out[b].push(e); }
+  return out;
 }
 
-/** Limits are attempt counts, not time, so the same seed gives the same puzzle on every device. */
-export function generateRiver(n: number, rnd: Rnd, clueShare = 0.18, attempts = 20): RiverPuzzle | null {
+export interface Step { edge: number; value: 1 | -1; why: string }
+
+/**
+ * One deduction a person could make from the marks so far, or null if none (or the marks contradict themselves).
+ * Rules, easiest first: a cell with two stretches takes no more; a cell with exactly two possible stretches takes
+ * both; a stretch that would close a loop missing some cells is out. With deep set, also: a stretch whose opposite
+ * leads straight to a contradiction under those rules.
+ */
+export function nextStep(n: number, s: Marks, ce = cellEdges(n), deep = false): Step | null {
+  const N = n * n;
+  for (let i = 0; i < N; i++) {
+    let on = 0, unk = 0;
+    for (const e of ce[i]) if (s[e] === 1) on++; else if (s[e] === 0) unk++;
+    if (on > 2 || on + unk < 2) return null;
+    if (!unk) continue;
+    if (on === 2) return { edge: ce[i].find((e) => s[e] === 0)!, value: -1, why: "That cell already has its two stretches." };
+    if (on + unk === 2) return { edge: ce[i].find((e) => s[e] === 0)!, value: 1, why: on ? "That cell has only one way left to go." : "That cell only has two ways in or out, so the river uses both." };
+  }
+  const { find, size, closed } = components(n, s);
+  if (closed) return null;
+  for (let e = 0; e < s.length; e++) {
+    if (s[e] !== 0) continue;
+    const [a, b] = edgeCells(n, e);
+    if (find(a) === find(b) && size(a) < N) return { edge: e, value: -1, why: "That would close the river into a loop that misses some cells." };
+  }
+  if (!deep) return null;
+  for (let e = 0; e < s.length; e++) {
+    if (s[e] !== 0) continue;
+    for (const v of [1, -1] as const) {
+      const t = [...s]; t[e] = v;
+      if (!settle(n, t, ce)) return { edge: e, value: v === 1 ? -1 : 1, why: v === 1 ? "Putting river there leads to a dead end or a short loop." : "Leaving that out strands a cell." };
+    }
+  }
+  return null;
+}
+
+/** Union the river so far; `closed` when it contains a loop that isn't the whole river. */
+function components(n: number, s: Marks) {
+  const N = n * n, parent = [...Array(N).keys()], sz = new Array(N).fill(1);
+  const find = (x: number): number => { while (parent[x] !== x) x = parent[x] = parent[parent[x]]; return x; };
+  let closed = false;
+  for (let e = 0; e < s.length; e++) {
+    if (s[e] !== 1) continue;
+    const [a, b] = edgeCells(n, e), ra = find(a), rb = find(b);
+    if (ra === rb) { if (sz[ra] < N) closed = true; continue; }
+    parent[ra] = rb; sz[rb] += sz[ra];
+  }
+  return { find, size: (x: number) => sz[find(x)], closed };
+}
+
+/** Apply the basic rules until they run out. False if the marks lead to a contradiction. */
+function settle(n: number, s: Marks, ce: number[][]) {
+  for (;;) {
+    const st = nextStep(n, s, ce);
+    if (!st) return !contradiction(n, s, ce);
+    s[st.edge] = st.value;
+  }
+}
+
+function contradiction(n: number, s: Marks, ce: number[][]) {
+  for (let i = 0; i < n * n; i++) {
+    let on = 0, unk = 0;
+    for (const e of ce[i]) if (s[e] === 1) on++; else if (s[e] === 0) unk++;
+    if (on > 2 || on + unk < 2) return true;
+  }
+  return components(n, s).closed;
+}
+
+/** Deduce as far as the rules go (in place). Returns false on a contradiction. */
+export function deduceRiver(n: number, s: Marks, deep = false, ce = cellEdges(n)) {
+  if (!settle(n, s, ce)) return false;
+  if (!deep) return true;
+  for (;;) {
+    const st = nextStep(n, s, ce, true);
+    if (!st) return !contradiction(n, s, ce);
+    s[st.edge] = st.value;
+    if (!settle(n, s, ce)) return false;
+  }
+}
+
+const marksFor = (n: number, clues: Iterable<number>) => { const s: Marks = new Array(edgeCount(n)).fill(0); for (const e of clues) s[e] = 1; return s; };
+
+/**
+ * Builds a loop, then adds clue stretches until the rules alone finish the river; that also proves it's the only
+ * answer. `prune` then drops that share of clues where the river stays solvable; `deep` allows trial reasoning.
+ * Limits are attempt counts, not time, so the same seed gives the same puzzle on every device.
+ */
+export function generateRiver(n: number, rnd: Rnd, opts: { prune: number; deep: boolean }, attempts = 6): RiverPuzzle | null {
+  const ce = cellEdges(n);
+  const solves = (clues: Iterable<number>) => { const s = marksFor(n, clues); return deduceRiver(n, s, opts.deep, ce) && s.every((v) => v !== 0); };
   for (let attempt = 0; attempt < attempts; attempt++) {
     const loop = randomLoop(n, rnd), solution = [...loop].sort((a, b) => a - b);
-    const clues = new Set(shuffle([...solution], rnd).slice(0, Math.round(solution.length * clueShare)));
-    for (let it = 0; it < n * n; it++) {
-      const { solutions, aborted } = solveRiver(n, clues, 2);
-      if (!aborted && solutions.length === 1) return { n, clues: [...clues].sort((a, b) => a - b), solution };
-      const other = solutions.find((s) => s.length !== solution.length || s.some((e) => !loop.has(e)));
-      const missing = other ? solution.filter((e) => !other.includes(e) && !clues.has(e)) : solution.filter((e) => !clues.has(e));
-      if (!missing.length) break;
-      clues.add(missing[Math.floor(rnd() * missing.length)]);
+    const clues = new Set<number>(), s = marksFor(n, []);
+    for (;;) {
+      if (!deduceRiver(n, s, opts.deep, ce)) break;
+      const open = solution.filter((e) => s[e] === 0);
+      if (!open.length) break;
+      const e = open[Math.floor(rnd() * open.length)];
+      clues.add(e); s[e] = 1;
     }
+    if (s.some((v, e) => v !== (loop.has(e) ? 1 : -1))) continue;
+    for (const e of shuffle([...clues], rnd)) {
+      if (rnd() >= opts.prune) continue;
+      clues.delete(e);
+      if (!solves(clues)) clues.add(e);
+    }
+    return { n, clues: [...clues].sort((a, b) => a - b), solution };
   }
   return null;
 }
