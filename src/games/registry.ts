@@ -38,6 +38,17 @@ export const GAMES: GameManifest[] = [
     tags: ["Logic", "Puzzle", "Daily"],
     badges: ["Daily", "3 puzzles"],
   },
+  {
+    slug: "decision-room",
+    title: "Decision Room",
+    tagline: "Reveal an elim round decision. Judges vote, Gary bangs the gavel.",
+    description:
+      "A live decision reveal for debate elimination rounds: the moderator sets up the round, judges turn in ballots, speaker points and RFDs from their phones, and Gary reveals the panel's decision with stats from every RFD.",
+    status: "live",
+    coverWorld: "core",
+    tags: ["Debate", "Live", "Tool"],
+    badges: ["Room code", "Any panel size"],
+  },
   // @new-game:manifest (keep this line: the scaffolder inserts new games above it)
 ];
 

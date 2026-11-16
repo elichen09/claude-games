@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { GAME_SERVER_ACTIONS } from "@/games/server";
+import { GAME_RATE_LIMITS, GAME_SERVER_ACTIONS } from "@/games/server";
 import { ActionError } from "@/lib/games/types";
 import { clientIp, rateLimit } from "@/lib/server/rate-limit";
 
@@ -15,7 +15,7 @@ async function handle(request: Request, { params }: Params) {
   if (!fn) return NextResponse.json({ error: "not_found" }, { status: 404 });
 
   const ip = clientIp(request);
-  const rl = rateLimit(`${slug}:${ip}`, 40, 60_000);
+  const rl = rateLimit(`${slug}:${ip}`, GAME_RATE_LIMITS[slug] ?? 40, 60_000);
   if (!rl.ok) return NextResponse.json({ error: "rate_limited" }, { status: 429, headers: { "retry-after": String(rl.retryAfter) } });
 
   let body: unknown = undefined;

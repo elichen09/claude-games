@@ -98,6 +98,23 @@ so it looks right in all four worlds.
   Anything a board marks `=0` stays rejected.
 - Matching, scoring and the daily seed are in `logic.ts`. Only answers on the board count; small typos are autocorrected.
 
+## Decision Room
+
+A live decision reveal for debate elimination rounds (`/games/decision-room`).
+
+1. The moderator enters the passcode (`eli123`, or `DECISION_ROOM_PASSCODE`), sets up the round (Aff/Neg or Pro/Con,
+   team codes, debaters, panel size) and gets a 4-letter room code plus a join link.
+2. Judges open the link or type the code, then submit a winner, speaker points and an RFD. They can edit until the reveal.
+   The moderator can turn in a ballot too.
+3. **View decision** locks the ballots. Most ballots wins; a tied panel is broken on team speaker points.
+   Gary flips the ballots one by one and announces "It was a 2–1 for the Con from Lincoln Sudbury AB", followed by
+   squirrels, low-point wins, top speaker, the themes the RFDs leaned on (weighing, drops, framework…) and key quotes.
+   Every judge's screen plays the reveal as well.
+
+The RFD stats come from plain text analysis in `src/games/decision-room/analyze.ts`; no AI service is involved.
+Rooms are stored through `src/lib/server/kv.ts`: set `KV_REST_API_URL` and `KV_REST_API_TOKEN` (an Upstash Redis
+from Vercel's Storage tab) for production, because in-memory rooms aren't shared between Vercel's server instances.
+
 ## Scripts
 
 | `npm run dev` | local dev server |
